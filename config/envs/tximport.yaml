@@ -1,0 +1,7 @@
+name: tximport
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - tximport=1.14.0

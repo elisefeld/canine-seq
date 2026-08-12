@@ -1,0 +1,18 @@
+[project]
+name = "canine-seq"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.5.2",
+    "pandas>=3.0.5",
+    "snakemake>=9.25.1",
+]
+
+[project.scripts]
+canine-seq = "canine_seq:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"

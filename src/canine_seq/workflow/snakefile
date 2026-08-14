@@ -1,0 +1,10 @@
+# add reports html later
+configfile: "config.yaml"
+
+include: "rules/convert.smk"
+
+
+
+rule all:
+    input:
+        expand("results/{sample}.txt", sample=SAMPLES)

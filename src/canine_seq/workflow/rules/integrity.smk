@@ -4,7 +4,10 @@ rule integrity:
 
     output:
         
+
+    log:
+        "logs/integrity/{sample}.log"
     conda:
-        "../envs/kallisto.yaml"
+     
     shell:
         samtools quickcheck {input} > {output}

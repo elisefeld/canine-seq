@@ -1,2 +1,4 @@
 __pycache__
 *.pyc
+resources/data/raw/*
+src/canine_seq/.snakemake

@@ -1,0 +1,21 @@
+configfile: "config.yaml"
+
+include: "rules/qc.smk"
+include: "rules/index.smk"
+include: "rules/pseudoalign.smk"
+
+SAMPLES = config["samples"]
+
+rule all:
+    input:
+        expand("results/{sample}.txt", sample=SAMPLES)
+
+
+# add qc
+
+# add trimming ?
+
+# add alignment
+
+    
+

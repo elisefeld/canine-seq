@@ -9,17 +9,16 @@ project:
   samples: config/samples.csv
 
 run:
-  threads: 8
-  raw_data_dir: "../resources/data/raw/ORBIT/samples"
-  sample_sheet: "../resources/data/raw/ORBIT/sample_sheet.csv" # later can auto parse file names into sample sheet
-  output_dir: "../results"
+  threads: 4
+  raw_data_dir: "resources/data/raw/ORBIT/samples"
+  sample_sheet: "resources/data/raw/ORBIT/sample_sheet.csv" # later can auto parse file names into sample sheet
+  output_dir: "results"
   logging_level: INFO # add logging later
 
 reference:
     genome:
-    gtf: "../resources/canine/Canis_lupus_familiaris.ROS_Cfam_1.0.116.gtf.gz"
-    cdna: "../resources/canine/Canis_lupus_familiaris.ROS_Cfam_1.0.cdna.all.fa.gz"
-
+    gtf: "resources/canine/Canis_lupus_familiaris.ROS_Cfam_1.0.116.gtf.gz"
+    cdna: "resources/canine/Canis_lupus_familiaris.ROS_Cfam_1.0.cdna.all.fa.gz"
 
  # add params for alignment algorithm
 

@@ -2,30 +2,26 @@
 # split into multiple snakefiles later
 
 configfile: "config/config.yaml"
-
-include: "rules/convert.smk"
-
-SAMPLES = glob_wildcards("/resources/data/raw/ORBIT/{sample}.cram")
+RAW_DIR = config["run"]["raw_data_dir"]
+THREADS = config["run"]["threads"]
+SAMPLES = glob_wildcards(f'{RAW_DIR}/{{sample}}.cram').sample
 print("Samples found:", SAMPLES)
 
 rule all:
     input: 
-        expand("/results/convert/{sample}.bam", sample=SAMPLES)
-
+        expand("resources/data/temp/{sample}.bam", sample=SAMPLES)
 
 rule convert:
     input:
-        cram="/resources/data/raw/ORBIT/{sample}.cram",
+        cram=f"{RAW_DIR}/{{sample}}.cram",
     output:
-        bam="/results/convert/{sample}.bam",
-        idx="/results/convert/{sample}.bai",
+        bam="resources/data/temp/{sample}.bam",
     log:
         "logs/convert/{sample}.log",
-    params:
-        extra="",  # optional params string
-        region="",  # optional region string
-    threads: 2
-    wrapper:
-        "v9.15.0/bio/samtools/view"
+    threads: THREADS
+    shell:
+        """
+        samtools view -b {input.cram} > {output.bam} --threads {threads} 2> {log}
+        """
 
 

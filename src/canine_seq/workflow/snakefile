@@ -1,10 +1,31 @@
 # add reports html later
-configfile: "config.yaml"
+# split into multiple snakefiles later
+
+configfile: "config/config.yaml"
 
 include: "rules/convert.smk"
 
-
+SAMPLES = glob_wildcards("/resources/data/raw/ORBIT/{sample}.cram")
+print("Samples found:", SAMPLES)
 
 rule all:
+    input: 
+        expand("/results/convert/{sample}.bam", sample=SAMPLES)
+
+
+rule convert:
     input:
-        expand("results/{sample}.txt", sample=SAMPLES)
+        cram="/resources/data/raw/ORBIT/{sample}.cram",
+    output:
+        bam="/results/convert/{sample}.bam",
+        idx="/results/convert/{sample}.bai",
+    log:
+        "logs/convert/{sample}.log",
+    params:
+        extra="",  # optional params string
+        region="",  # optional region string
+    threads: 2
+    wrapper:
+        "v9.15.0/bio/samtools/view"
+
+

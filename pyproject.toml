@@ -11,4 +11,3 @@ dependencies = [
 
 [project.scripts]
 canine-seq = "canine_seq:main"
-

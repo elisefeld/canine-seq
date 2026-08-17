@@ -1,0 +1,40 @@
+# add reports html later
+# split into multiple snakefiles later
+
+configfile: "config/config.yaml"
+RAW_DIR = config["run"]["raw_data_dir"]
+REF_DIR = f"resources/reference/{config['run']['ref_organism']}/{config['run']['ref_build']}"
+RESULTS_DIR = config["run"]["results_dir"]
+
+THREADS = config["run"]["threads"]
+PROJECT = config["project"]["name"]
+
+SAMPLES = glob_wildcards(f'{RAW_DIR}/{{sample}}.cram').sample
+print("Samples found:", SAMPLES)
+
+
+rule all:
+    input: 
+        f"{REF_DIR}/refseq.mrna.idx"
+
+rule k_index:
+    input: 
+        fasta=f"{REF_DIR}/refseq.mrna.fa.gz"
+    output: 
+        idx=f"{REF_DIR}/refseq.mrna.idx"
+    shell:
+        """
+        kallisto index -i {output.idx} {input.fasta}
+        """
+
+rule extract_fastq:
+    input:
+        cram=f"{RAW_DIR}/{{sample}}.cram",
+    output:
+        fastq=f"{RESULTS_DIR}/temp/fastq{{sample}}.fastq.gz",
+    shell:
+        """
+        mkdir -p {RESULTS_DIR}/temp
+        mkdir -p {RESULTS_DIR}/temp/fastq
+        """
+        

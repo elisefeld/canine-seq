@@ -1,0 +1,25 @@
+
+project:
+  name: ORBIT
+  organism: Canis lupus familiaris
+  application_type: MRNAS
+  end_type: Paired
+  flowcell_id: 20260602_LH00761_0167_A22K7HFLT1
+  PI: Shruthi Naik
+
+run:
+  ref_organism: dog
+  ref_build: canfam4
+  threads: 4
+  raw_data_dir: "resources/data/raw/ORBIT" # edit to auto reference from project name
+  sample_sheet: "resources/data/raw/ORBIT/sample_sheet.csv" # later can auto parse file names into sample sheet
+  results_dir: "results/ORBIT" # edit to auto reference from project name
+  logging_level: INFO # add logging later
+
+reference:
+    genome: "resources/reference/dog/canFam4.fa.gz"
+    gtf: "resources/reference/dog/canFam4ncbiRefSeq.gtf.gz"
+    mrna: "resources/reference/dog/refseq.mrna.fa.gz"
+
+ # add params for alignment algorithm
+

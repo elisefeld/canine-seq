@@ -36,5 +36,7 @@ rule extract_fastq:
         """
         mkdir -p {RESULTS_DIR}/temp
         mkdir -p {RESULTS_DIR}/temp/fastq
+
+        
         """
         

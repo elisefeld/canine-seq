@@ -42,7 +42,19 @@ rule extract_fastq:
         mkdir -p {RESULTS_DIR}/temp/fastq
         samtools fastq -@ {THREADS} -1 {output.fastq1} -2 {output.fastq2} {input.cram}
         """
-        
+
+rule fastqc:
+    input:
+        fastq1=f"{RESULTS_DIR}/temp/fastq/{{sample}}_1.fastq.gz",
+        fastq2=f"{RESULTS_DIR}/temp/fastq/{{sample}}_2.fastq.gz"
+    output:
+        html1=f"{RESULTS_DIR}/temp/fastqc/{{sample}}_1_fastqc.html",
+        html2=f"{RESULTS_DIR}/temp/fastqc/{{sample}}_2_fastqc.html"
+    shell:
+        """
+        mkdir -p {RESULTS_DIR}/temp/fastqc
+        fastqc -o {RESULTS_DIR}/temp/fastqc -t {THREADS} {input.fastq1} {input.fastq2}
+        """
 
 rule kallisto_quant:
     input:

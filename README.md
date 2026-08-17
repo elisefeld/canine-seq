@@ -1,30 +1,117 @@
-Set-up Guide for RNA-Seq Analysis Program
+# canine-seq
 
-Save the canine-seq package to the documents folder on your windows machine.
+This project automates the analysis of bulk RNA-seq data (.cram format) from canine subjects. 
 
-DOWNLOADING WINDOWS SUBSTATION FOR LINUX WITH UBUNTU
-1.	Request administrative privileges
-2.	Open powershell as administrator
-3.	Run: wsl --install
-4.	Open the Microsoft store
-5.	Search for “Ubuntu”
-6.	Download Ubuntu
-7.	Search for Control Panel
-8.	Go to Control Panel > Programs and Features > Turn Windows Features on or Off
-9.	Check “Windows Subsystem for Linux”, “Virtual Machine Platform”, and “Windows Hypervisor Platform”
-10.	Restart your computer
-11.	Open Ubuntu
-12.	 Follow the prompts to set up a username and password
-13.	 Run: sudo apt update && sudo apt upgrade
-DOWNLOADING CONDA AND CREATING AN ENVIRONMENT
-1.	Run: wget https://github.com/conda-forge/miniforge/releases/latest/download/miniforge3-linux-x86_64.sh --no-check-certificate
-2.	Run: bash ~/Miniforge3-Linux-x86_64.sh
-3.	Confirm the prompts (yes > enter > yes)
-4.	Run: source ~/miniforge3/bin/activate
-5.	Run: conda config --add channels bioconda
-6.	Run: conda create --name rna-seq python=3.14.6
-7.	Run: conda activate rna-seq
-DOWNLOADING NECESSARY TOOLS
-1.	Run: conda install samtools= gatk= snakemake= subread= numpy= pandas=
-2.	cd /mnt/c/Users/YOURID/Documents/canine-seq/
-3.	/usr/bin/time snakemake -s src/canine_seq/workflow/Snakefile -p --cores all
+## Overview
+
+This project provides a reproducible workflow for:
+
+- Converting .cram to .bam
+- 
+- 
+
+The workflow is implemented using Snakemake and is designed to support reproducible analysis.
+
+## Features
+
+- Reproducible workflow execution
+- Automated dependency management
+- Modular pipeline design
+- Configurable parameters
+- Built-in quality control and reporting
+
+## Workflow
+
+```text
+Input Data
+    ↓
+Preprocessing
+    ↓
+Analysis
+    ↓
+Quality Control
+    ↓
+Results
+```
+
+## Quick Start
+
+### Dependencies
+- snakemake v
+- a conda package manager (miniforge3 was used for this project)
+ 
+Clone the repository:
+
+```bash
+git clone https://github.com/elisefeld/canine-seq.git
+cd project
+```
+
+Install dependencies:
+
+```bash
+# See INSTALL.md for detailed setup
+```
+
+Run the workflow:
+
+```bash
+snakemake --cores 8
+```
+
+## Repository Structure
+
+```text
+.
+├── config/         # configuration files
+├── docs/           # project documentation
+├── logs/           # workflow logs
+├── resources/      # raw and reference data
+├── scripts/        # analysis scripts
+├── workflow/       # snakefile and rules
+└── results/        # generated outputs
+```
+
+## Configuration
+
+Pipeline settings are controlled through:
+
+```text
+config/config.yaml
+```
+
+Modify the configuration file before running analyses.
+
+## Input Data
+
+This project currently only supports already aligned data in cram format. Add a folder in /resources/data/raw named with the project name. It should include the raw data and a sample sheet.
+
+```text
+/resources/data/raw/PROJECT_NAME
+├── sample_sheet.csv
+├── file_1.cram
+└── file_1.cram.crai
+```
+
+## Outputs
+
+The workflow generates:
+
+| Output | Description |
+|----------|-------------|
+| results/summary.csv | Final summary table |
+| results/figures/ | Generated plots |
+| results/reports/ | QC reports |
+
+
+## Installation
+
+Detailed installation instructions are available in
+[INSTALL.md](INSTALL.md).
+
+## License
+
+This project is distributed under the MIT license. See license.md for more details. 
+
+
+

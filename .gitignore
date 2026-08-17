@@ -2,5 +2,6 @@ __pycache__
 *.pyc
 resources/data/raw/*
 resources/data/temp/*
+results/*
 .snakemake
 logs/*

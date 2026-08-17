@@ -9,19 +9,16 @@ print("Samples found:", SAMPLES)
 
 rule all:
     input: 
-        expand("resources/data/temp/{sample}.bam", sample=SAMPLES)
+        "resources/reference/canine/canfam4/refseq.mrna.idx"
 
-rule convert:
-    input:
-        cram=f"{RAW_DIR}/{{sample}}.cram",
-    output:
-        bam="resources/data/temp/{sample}.bam",
-    log:
-        "logs/convert/{sample}.log",
-    threads: THREADS
+rule kindex:
+    input: 
+        fasta="resources/reference/canine/canfam4/refseq.mrna.fa.gz"
+    output: 
+        idx="resources/reference/canine/canfam4/refseq.mrna.idx"
     shell:
         """
-        samtools view -b {input.cram} > {output.bam} --threads {threads} 2> {log}
+        kallisto index -i {output.idx} {input.fasta}
         """
 
-
+        

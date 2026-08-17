@@ -1,39 +1,43 @@
 # Set-up Guide for RNA-Seq Analysis Program
+This guide will walk you through installing and running the canine-seq program on a Windows computer.
 
-Save the canine-seq package to the documents folder on your windows machine.
+## What you Will Install
+- Windows Subsystem for Linux (WSL)
+- Ubuntu Linux
+- Miniforge 
+- The software required to run the workflow (snakemake)
 
-DOWNLOADING WINDOWS SUBSTATION FOR LINUX WITH UBUNTU
-1.	Request administrative privileges
-2.	Open powershell as administrator
-3.	Run: wsl --install
-4.	Open the Microsoft store
-5.	Search for “Ubuntu”
-6.	Download Ubuntu
-7.	Search for Control Panel
-8.	Go to Control Panel > Programs and Features > Turn Windows Features on or Off
-9.	Check “Windows Subsystem for Linux”, “Virtual Machine Platform”, and “Windows Hypervisor Platform”
-10.	Restart your computer
-11.	Open Ubuntu
-12.	 Follow the prompts to set up a username and password
-13.	 Run: sudo apt update && sudo apt upgrade
+## Requirements
+- Windows 11
+- Administrative privileges on your computer
+- A stable internet connection
+- At least 50GB of free disk space
 
-MOVING PROJECT TO WSL
-1. Download the canine-seq package into your documents folder(further instructions TBD)
-2. cp -R /mnt/c/Users/YOUR_USERNAME/Documents/canine-seq ~/canine_seq
+## Step 1: Install Windows Subsystem for Linux (WSL)
+Many of the tools necessary for this workflow do not run on Windows. WSL allows you to run Linux software on your Windows computer.
 
-DOWNLOADING CONDA AND CREATING AN ENVIRONMENT
-1.	Run: wget https://github.com/conda-forge/miniforge/releases/latest/download/miniforge3-linux-x86_64.sh --no-check-certificate
-2.	Run: bash ~/Miniforge3-Linux-x86_64.sh
-3.	Confirm the prompts (yes > enter > yes)
-4.	Run: source ~/miniforge3/bin/activate
-
-#Replace the following with creating env from env file
-5.	Run: conda config --add channels bioconda
-6.	Run: conda create --name rna-seq python=3.14.6
-7.	Run: conda activate rna-seq
+### Open Powershell as Administrator
+1. Obtain administrative privileges
+2. Click the start menu
+3. Type **PowerShell**
+4. Right-click **Windows PowerShell**
+5. Select **Run as Administrator**
+### Install WSL
+1. In the PowerShell window, run 
+```bash
+wsl --install
+```
+2. Press **Enter**. The installation may take several minutes. 
+2. Once installation is complete, restart your computer.
 
 
-DOWNLOADING NECESSARY TOOLS
-1.	Run: conda install samtools= gatk= snakemake= subread= numpy= pandas=
-2.	cd /mnt/c/Users/YOURID/Documents/canine-seq/
-3.	/usr/bin/time snakemake -s src/canine_seq/workflow/Snakefile -p --cores all
+## Step 2: Install Ubuntu
+
+
+## Step 3: Install Miniforge
+
+## Step 4: Download the canine-seq Project
+
+## Step 5: Create the Conda Environment
+
+

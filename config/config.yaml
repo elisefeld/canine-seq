@@ -13,6 +13,7 @@ run:
   threads: 4
   raw_data_dir: "resources/data/raw/ORBIT" # edit to auto reference from project name
   sample_sheet: "resources/data/raw/ORBIT/sample_sheet.csv" # later can auto parse file names into sample sheet
+  ref_dir: "resources/reference/dog/canfam4" # edit to auto reference from project name
   results_dir: "results/ORBIT" # edit to auto reference from project name
   logging_level: INFO # add logging later
 

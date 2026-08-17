@@ -3,19 +3,22 @@
 
 configfile: "config/config.yaml"
 RAW_DIR = config["run"]["raw_data_dir"]
-REF_DIR = f"resources/reference/{config['run']['ref_organism']}/{config['run']['ref_build']}"
+REF_DIR = config["run"]["ref_dir"]
 RESULTS_DIR = config["run"]["results_dir"]
 
 THREADS = config["run"]["threads"]
 PROJECT = config["project"]["name"]
 
-SAMPLES = glob_wildcards(f'{RAW_DIR}/{{sample}}.cram').sample
+SAMPLES = glob_wildcards(f'{RAW_DIR}/samples/{{sample}}.cram').sample
 print("Samples found:", SAMPLES)
 
 
 rule all:
     input: 
-        f"{REF_DIR}/refseq.mrna.idx"
+        f"{REF_DIR}/refseq.mrna.idx",
+        expand(f"{RESULTS_DIR}/temp/fastq/{{sample}}_1.fastq.gz", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/temp/fastq/{{sample}}_2.fastq.gz", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES)
 
 rule k_index:
     input: 
@@ -29,14 +32,28 @@ rule k_index:
 
 rule extract_fastq:
     input:
-        cram=f"{RAW_DIR}/{{sample}}.cram",
+        cram=f"{RAW_DIR}/samples/{{sample}}.cram",
     output:
-        fastq=f"{RESULTS_DIR}/temp/fastq{{sample}}.fastq.gz",
+        fastq1=f"{RESULTS_DIR}/temp/fastq/{{sample}}_1.fastq.gz",
+        fastq2=f"{RESULTS_DIR}/temp/fastq/{{sample}}_2.fastq.gz",
     shell:
         """
         mkdir -p {RESULTS_DIR}/temp
         mkdir -p {RESULTS_DIR}/temp/fastq
-
-        
+        samtools fastq -@ {THREADS} -1 {output.fastq1} -2 {output.fastq2} {input.cram}
         """
         
+
+rule kallisto_quant:
+    input:
+        idx=f"{REF_DIR}/refseq.mrna.idx",
+        fastq1=f"{RESULTS_DIR}/temp/fastq/{{sample}}_1.fastq.gz",
+        fastq2=f"{RESULTS_DIR}/temp/fastq/{{sample}}_2.fastq.gz"
+    output:
+        abundance=f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv"
+    shell:
+        """
+        mkdir -p {RESULTS_DIR}/kallisto/{{wildcards.sample}}
+        kallisto quant -i {input.idx} -o {RESULTS_DIR}/kallisto/{{wildcards.sample}} -t {THREADS} {input.fastq1} {input.fastq2}
+        """
+

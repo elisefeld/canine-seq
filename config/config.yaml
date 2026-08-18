@@ -5,25 +5,30 @@ project:
   tissue_type: Lymph Node
   sample_type: Fine Needle Aspirate
   disease: Cancer
+  PI: Shruthi Naik
+
+seq:
+  platform: Illumina NovaSeq X
   application_type: MRNAS 
   end_type: Paired
+  read_length: 100
+  adapter_sequence: IAGGTCAGATA-CTACAAGATA
   flowcell_id: 20260602_LH00761_0167_A22K7HFLT1
   lane: 1
-  PI: Shruthi Naik
-  run_by: Elise Hachfeld
 
 run:
   ref_organism: dog
   ref_build: canfam4
   threads: 4
   logging_level: INFO # add logging later
+  run_by: Elise Hachfeld
 
 reference:
   genome: "canFam4.fa.gz"
   gtf: "canFam4ncbiRefSeq.gtf.gz"
   mrna: "refseq.mrna.fa.gz"
 
-path: # Do not change these unless you are confident in directory structure and file locations.
+path: # Do NOT change these unless you are confident in directory structure and file locations.
   raw_data_dir: "resources/data/raw"
   reference_dir: "resources/reference"
   results_dir: "results"

@@ -46,8 +46,8 @@ rule flagstat:
         cram=f"{PROJECT_DATA_DIR}/{{sample}}.cram",
     output:
         flagstat=f"{RESULTS_DIR}/qc/flagstat/{{sample}}.txt"
-    conda: 
-        "../config/env.yaml"
+    #conda: 
+    #    "../config/env.yaml"
     shell:
         """
         echo "Running samtools flagstat on {input.cram}..."
@@ -60,8 +60,8 @@ rule extract_fastq:
     output:
         fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
         fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz",
-    conda: 
-        "../config/env.yaml"
+    #conda: 
+    #    "../config/env.yaml"
     shell:
         """
         echo "Extracting FASTQ files from {input.cram}..."
@@ -75,8 +75,8 @@ rule adapter_trim:
     output:
         trimmed_fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.trimmed.fastq.gz",
         trimmed_fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.trimmed.fastq.gz"
-    conda: 
-        "../config/env.yaml"
+    #conda: 
+    #    "../config/env.yaml"
     shell:
         """
         """
@@ -88,8 +88,8 @@ rule fastqc:
     output:
         html1=f"{RESULTS_DIR}/qc/fastqc/{{sample}}_R1_fastqc.html",
         html2=f"{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.html"
-    conda: 
-        "../config/env.yaml"
+    #conda: 
+    #    "../config/env.yaml"
     shell:
         """
         fastqc -o {RESULTS_DIR}/qc/fastqc -t {THREADS} {input.fastq1} {input.fastq2}
@@ -108,8 +108,8 @@ rule kallisto_index:
         fasta=f"{REF_DIR}/{MRNA_REF}" #is this the correct input file?
     output: 
         idx=f"{REF_DIR}/refseq.mrna.idx"
-    conda: 
-        "../config/env.yaml"
+    #conda: 
+    #    "../config/env.yaml"
     shell:
         """
         echo "Building kallisto index for {input.fasta}..."
@@ -123,8 +123,8 @@ rule kallisto_quant:
         fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
     output:
         abundance=f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv"
-    conda:
-        "../config/env.yaml"
+    #conda:
+    #    "../config/env.yaml"
     shell:
         """
         kallisto quant -i {input.idx} -o {RESULTS_DIR}/kallisto/{{sample}} -t {THREADS} {input.fastq1} {input.fastq2}

@@ -29,12 +29,13 @@ print("Samples found:", SAMPLES)
 
 rule all:
     input: 
-        f"{REF_DIR}/refseq.mrna.idx",
+        expand(f"{RESULTS_DIR}/qc/flagstat/{{sample}}.txt", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/qc/fastqc/{{sample}}_R1_fastqc.html", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.html", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES)
+        f"{REF_DIR}/refseq.mrna.idx",
+       # expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES)
 
 
 

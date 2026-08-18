@@ -41,7 +41,7 @@ rule all:
         #expand(f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R1_fastqc.html", sample=SAMPLES),
         #expand(f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R2_fastqc.html", sample=SAMPLES),
         f"{REF_DIR}/refseq.mrna.idx",
-        f"{RESULTS_DIR}/multiqc/multiqc_report.html"
+        f"{REPORT_DIR}/multiqc_report.html"
        # expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES)
 
 ###########################
@@ -152,14 +152,13 @@ rule kallisto_quant:
 
 rule multiqc:
     input:
-        raw_dir={PROJECT_DATA_DIR}
-        results_dir={RESULTS_DIR}
+        raw_dir={PROJECT_DATA_DIR},
+        results_dir={RESULTS_DIR},
         out_dir={REPORT_DIR}
-        name=f"multiqc_report_{PROJECT}"
     output:
-        html=f"{REPORT_DIR}/multiqc/multiqc_report.html"
+        html=f"{REPORT_DIR}/multiqc_report.html"
 
     shell:
         """
-        multiqc {input.raw_dir} {input.results_dir} -o {input.out_dir} -n {input.name} 
+        multiqc {input.raw_dir} {input.results_dir} -o {input.out_dir}
         """

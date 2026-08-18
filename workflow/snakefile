@@ -36,10 +36,10 @@ rule all:
         expand(f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R1_fastqc.html", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R2_fastqc.html", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R1_fastqc.html", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R2_fastqc.html", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz", sample=SAMPLES),
+        #expand(f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R1_fastqc.html", sample=SAMPLES),
+        #expand(f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R2_fastqc.html", sample=SAMPLES),
         f"{REF_DIR}/refseq.mrna.idx",
         f"{RESULTS_DIR}/multiqc/multiqc_report.html"
        # expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES)
@@ -103,19 +103,19 @@ rule adapter_trim: #this step didn't do much so reads were probably already trim
         fastp trim -V -o {output.trimmed_fastq1} -O {output.trimmed_fastq2} -i {input.fastq1} -I {input.fastq2} -h {output.html_report}
         """
 
-rule post_fastqc:
-    input:
-        fastq1=f"{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz",
-        fastq2=f"{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz"
-    output:
-        html1=f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R1_fastqc.html",
-        html2=f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R2_fastqc.html"
-    #conda: 
-    #    "../config/env.yaml"
-    shell:
-        """
-        fastqc -o {RESULTS_DIR}/qc/fastqc -t {THREADS} {input.fastq1} {input.fastq2}
-        """
+#rule post_fastqc:
+#    input:
+#        fastq1=f"{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz",
+#        fastq2=f"{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz"
+#    output:
+#       html1=f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R1_fastqc.html",
+#        html2=f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R2_fastqc.html"
+#    #conda: 
+#    #    "../config/env.yaml"
+#    shell:
+#        """
+#        fastqc -o {RESULTS_DIR}/qc/fastqc -t {THREADS} {input.fastq1} {input.fastq2}
+#        """
 
 ###########################
 ##### PSEUDOALIGNMENT #####

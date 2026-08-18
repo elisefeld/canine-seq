@@ -32,12 +32,12 @@ rule all:
         expand(f"{RESULTS_DIR}/qc/flagstat/{{sample}}.txt", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/qc/fastqc/{{sample}}_R1_fastqc.html", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.html", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R1_fastqc.html", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R2_fastqc.html", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/fastq/{{sample}}_R1_trimmed.fastq.gz", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/fastq/{{sample}}_R2_trimmed.fastq.gz", sample=SAMPLES),
         f"{REF_DIR}/refseq.mrna.idx",
        # expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES)
-
-
 
 ###########################
 ## QUALITY CONTROL RULES ##
@@ -69,32 +69,37 @@ rule extract_fastq:
         samtools fastq -@ {THREADS} -1 {output.fastq1} -2 {output.fastq2} {input.cram}
         """
 
-rule adapter_trim:
-    input:
-        fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
-        fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
-    output:
-        trimmed_fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.trimmed.fastq.gz",
-        trimmed_fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.trimmed.fastq.gz"
-    #conda: 
-    #    "../config/env.yaml"
-    shell:
-        """
-        """
-
 rule fastqc:
     input:
         fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
         fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
     output:
-        html1=f"{RESULTS_DIR}/qc/fastqc/{{sample}}_R1_fastqc.html",
-        html2=f"{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.html"
+        html1=f"{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R1_fastqc.html",
+        html2=f"{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R2_fastqc.html"
     #conda: 
     #    "../config/env.yaml"
     shell:
         """
         fastqc -o {RESULTS_DIR}/qc/fastqc -t {THREADS} {input.fastq1} {input.fastq2}
         """
+
+
+# skip this for now?
+rule adapter_trim:
+    input:
+        fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
+        fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
+    output:
+        trimmed_fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1_trimmed.fastq.gz",
+        trimmed_fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2_trimmed.fastq.gz"
+    #conda: 
+    #    "../config/env.yaml"
+    shell:
+        """
+        fastp trim -V -o {output.trimmed_fastq1} -O {output.trimmed_fastq2} -i {input.fastq1} -I {input.fastq2}
+        """
+
+
 
 # multiqc
 

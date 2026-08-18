@@ -18,7 +18,7 @@ BASE_RESULTS_DIR = config["path"]["results_dir"]
 BASE_REPORT_DIR = config["path"]["report_dir"]
 SAMPLE_SHEET = config["path"]["sample_sheet"]
 
-MRNA_REF = config["reference"]["mrna"]
+CDNA_REF = config["reference"]["cdna"]
 
 PROJECT_DATA_DIR = f"{BASE_DATA_DIR}/{PROJECT}"
 SAMPLE_SHEET_PATH = f"{PROJECT_DATA_DIR}/{SAMPLE_SHEET}"
@@ -40,9 +40,10 @@ rule all:
         expand(f"{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz", sample=SAMPLES),
         #expand(f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R1_fastqc.html", sample=SAMPLES),
         #expand(f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R2_fastqc.html", sample=SAMPLES),
-        f"{REF_DIR}/refseq.mrna.idx",
+        f"{REF_DIR}/{ORGANISM}_{BUILD}.idx",
+        expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES),
         f"{REPORT_DIR}/multiqc_report.html"
-       # expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES)
+        
 
 ###########################
 ## QUALITY CONTROL RULES ##
@@ -120,14 +121,11 @@ rule adapter_trim: #this step didn't do much so reads were probably already trim
 ###########################
 ##### PSEUDOALIGNMENT #####
 ###########################
-
-# need to add adapter trimming and quality control steps before kallisto quantification
-
 rule kallisto_index:
     input: 
-        fasta=f"{REF_DIR}/{MRNA_REF}" #is this the correct input file?
+        fasta=f"{REF_DIR}/{CDNA_REF}"
     output: 
-        idx=f"{REF_DIR}/refseq.mrna.idx"
+        idx=f"{REF_DIR}/{ORGANISM}_{BUILD}.idx"
     #conda: 
     #    "../config/env.yaml"
     shell:
@@ -138,7 +136,7 @@ rule kallisto_index:
 
 rule kallisto_quant:
     input:
-        idx=f"{REF_DIR}/refseq.mrna.idx",
+        idx=f"{REF_DIR}/{ORGANISM}_{BUILD}.idx",
         fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
         fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
     output:
@@ -147,9 +145,12 @@ rule kallisto_quant:
     #    "../config/env.yaml"
     shell:
         """
-        kallisto quant -i {input.idx} -o {RESULTS_DIR}/kallisto/{{sample}} -t {THREADS} {input.fastq1} {input.fastq2}
+        kallisto quant -i {input.idx} -o {RESULTS_DIR}/kallisto/{sample} -t {THREADS} {input.fastq1} {input.fastq2}
         """
 
+###########################
+######### REPORT ##########
+###########################
 rule multiqc:
     input:
         raw_dir={PROJECT_DATA_DIR},

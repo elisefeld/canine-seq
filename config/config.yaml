@@ -1,14 +1,13 @@
 
 project:
-  name: ORBIT
-  organism: Canis lupus familiaris
-  application_type: MRNAS
+  name: ORBIT # Name of project used to define input and output directories
+  organism: Canis lupus familiaris # Scientific name of organism
+  application_type: MRNAS 
   end_type: Paired
   flowcell_id: 20260602_LH00761_0167_A22K7HFLT1
   PI: Shruthi Naik
 
 run:
-  sample_sheet: "samples.csv"
   ref_organism: dog
   ref_build: canfam4
   threads: 4
@@ -18,6 +17,12 @@ reference:
     genome: "canFam4.fa.gz"
     gtf: "canFam4ncbiRefSeq.gtf.gz"
     mrna: "refseq.mrna.fa.gz"
+
+path: # Do not change these unless you are confident in directory structure and file locations.
+  raw_data_dir: "resources/data/raw"
+  reference_dir: "resources/reference"
+  results_dir: "results"
+  sample_sheet: "samples.csv"
 
  # add params for alignment algorithm
 

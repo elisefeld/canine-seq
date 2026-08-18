@@ -1,4 +1,5 @@
 # NOTES FOR LATER:
+# Create step that parses sample sheet from file names
 # Add support for other organisms
 # Add reports in HTML format
 # Split snakefile into multiple smks
@@ -6,16 +7,24 @@
 configfile: "config/config.yaml"
 
 PROJECT = config["project"]["name"]
+
 ORGANISM = config["run"]["ref_organism"]
 BUILD = config["run"]["ref_build"]
 THREADS = config["run"]["threads"]
 
-SAMPLE_SHEET = "resources/data/raw/{PROJECT}/{SAMPLE_SHEET}"
-RAW_DIR = "resources/data/raw/{PROJECT}"
-REF_DIR = "resources/reference/{ORGANISM}/{BUILD}"
-RESULTS_DIR = "results/{PROJECT}"
+BASE_REF_DIR = config["path"]["reference_dir"]
+BASE_DATA_DIR = config["path"]["raw_data_dir"]
+BASE_RESULTS_DIR = config["path"]["results_dir"]
+SAMPLE_SHEET = config["path"]["sample_sheet"]
 
-SAMPLES = glob_wildcards(f'{RAW_DIR}/{{sample}}.cram').sample
+MRNA_REF = config["reference"]["mrna"]
+
+PROJECT_DATA_DIR = "{BASE_DATA_DIR}/{PROJECT}"
+SAMPLE_SHEET_PATH = "{PROJECT_DATA_DIR}/{SAMPLE_SHEET}"
+REF_DIR = "{BASE_REF_DIR}/{ORGANISM}/{BUILD}"
+RESULTS_DIR = "{BASE_RESULTS_DIR}/{PROJECT}"
+
+SAMPLES = glob_wildcards(f'{PROJECT_DATA_DIR}/{{sample}}.cram').sample
 print("Samples found:", SAMPLES)
 
 # need to add adapter trimming and quality control steps before kallisto quantification
@@ -30,9 +39,11 @@ rule all:
 
 rule kallisto_index:
     input: 
-        fasta=f"{REF_DIR}/refseq.mrna.fa.gz" #is this the correct input file?
+        fasta=f"{REF_DIR}/{MRNA_REF}" #is this the correct input file?
     output: 
         idx=f"{REF_DIR}/refseq.mrna.idx"
+    conda: 
+        "config/env.yaml"
     shell:
         """
         echo "Building kallisto index for {input.fasta}..."
@@ -43,37 +54,41 @@ rule extract_fastq:
     input:
         cram=f"{RAW_DIR}/{{sample}}.cram",
     output:
-        fastq1=f"{RESULTS_DIR}/temp/fastq/{{sample}}_1.fastq.gz",
-        fastq2=f"{RESULTS_DIR}/temp/fastq/{{sample}}_2.fastq.gz",
+        fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
+        fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz",
+    conda: 
+        "config/env.yaml"
     shell:
         """
-        mkdir -p {RESULTS_DIR}/temp
-        mkdir -p {RESULTS_DIR}/temp/fastq
+        echo "Extracting FASTQ files from {input.cram}..."
         samtools fastq -@ {THREADS} -1 {output.fastq1} -2 {output.fastq2} {input.cram}
         """
 
 rule adapter_trim:
     input:
-        fastq1=f"{RESULTS_DIR}/temp/fastq/{{sample}}_1.fastq.gz",
-        fastq2=f"{RESULTS_DIR}/temp/fastq/{{sample}}_2.fastq.gz"
+        fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
+        fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
     output:
-        trimmed_fastq1=f"{RESULTS_DIR}/temp/fastq/{{sample}}_1.trimmed.fastq.gz",
-        trimmed_fastq2=f"{RESULTS_DIR}/temp/fastq/{{sample}}_2.trimmed.fastq.gz"
+        trimmed_fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.trimmed.fastq.gz",
+        trimmed_fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.trimmed.fastq.gz"
+    conda: 
+        "config/env.yaml"
     shell:
         """
         """
 
 rule fastqc:
     input:
-        fastq1=f"{RESULTS_DIR}/temp/fastq/{{sample}}_1.fastq.gz",
-        fastq2=f"{RESULTS_DIR}/temp/fastq/{{sample}}_2.fastq.gz"
+        fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
+        fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
     output:
-        html1=f"{RESULTS_DIR}/temp/fastqc/{{sample}}_1_fastqc.html",
-        html2=f"{RESULTS_DIR}/temp/fastqc/{{sample}}_2_fastqc.html"
+        html1=f"{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.html",
+        html2=f"{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.html"
+    conda: 
+        "config/env.yaml"
     shell:
         """
-        mkdir -p {RESULTS_DIR}/temp/fastqc
-        fastqc -o {RESULTS_DIR}/temp/fastqc -t {THREADS} {input.fastq1} {input.fastq2}
+        fastqc -o {RESULTS_DIR}/fastqc -t {THREADS} {input.fastq1} {input.fastq2}
         """
 
 # multiqc
@@ -81,10 +96,12 @@ rule fastqc:
 rule kallisto_quant:
     input:
         idx=f"{REF_DIR}/refseq.mrna.idx",
-        fastq1=f"{RESULTS_DIR}/temp/fastq/{{sample}}_1.fastq.gz",
-        fastq2=f"{RESULTS_DIR}/temp/fastq/{{sample}}_2.fastq.gz"
+        fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
+        fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
     output:
         abundance=f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv"
+    conda:
+        "config/env.yaml"
     shell:
         """
         mkdir -p {RESULTS_DIR}/kallisto/{{wildcards.sample}}

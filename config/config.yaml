@@ -2,10 +2,15 @@
 project:
   name: ORBIT # Name of project used to define input and output directories
   organism: Canis lupus familiaris # Scientific name of organism
+  tissue_type: Lymph Node
+  sample_type: Fine Needle Aspirate
+  disease: Cancer
   application_type: MRNAS 
   end_type: Paired
   flowcell_id: 20260602_LH00761_0167_A22K7HFLT1
+  lane: 1
   PI: Shruthi Naik
+  run_by: Elise Hachfeld
 
 run:
   ref_organism: dog
@@ -14,9 +19,9 @@ run:
   logging_level: INFO # add logging later
 
 reference:
-    genome: "canFam4.fa.gz"
-    gtf: "canFam4ncbiRefSeq.gtf.gz"
-    mrna: "refseq.mrna.fa.gz"
+  genome: "canFam4.fa.gz"
+  gtf: "canFam4ncbiRefSeq.gtf.gz"
+  mrna: "refseq.mrna.fa.gz"
 
 path: # Do not change these unless you are confident in directory structure and file locations.
   raw_data_dir: "resources/data/raw"

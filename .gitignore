@@ -1,8 +1,10 @@
 __pycache__
 *.pyc
-resources/data/raw/*
-resources/data/temp/*
+resources/data/*
 results/*
 .snakemake
 logs/*
 resources/reference/*
+report/*
+multiqc_data
+*.html

@@ -38,8 +38,6 @@ rule all:
         expand(f"{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R2_fastqc.html", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz", sample=SAMPLES),
-        #expand(f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R1_fastqc.html", sample=SAMPLES),
-        #expand(f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R2_fastqc.html", sample=SAMPLES),
         f"{REF_DIR}/{ORGANISM}_{BUILD}.idx",
         expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES),
         f"{REPORT_DIR}/multiqc_report.html"
@@ -94,29 +92,15 @@ rule adapter_trim: #this step didn't do much so reads were probably already trim
         fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
         fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
     output:
-        trimmed_fastq1=f"{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz",
-        trimmed_fastq2=f"{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz",
-        html_report=f"{RESULTS_DIR}/fastp/{{sample}}.html"
+        trimmed_fastq1=f"{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz",
+        trimmed_fastq2=f"{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz",
+        html_report=f"{RESULTS_DIR}/qc/fastp/{{sample}}.html"
     #conda: 
     #    "../config/env.yaml"
     shell:
         """
         fastp trim -V -o {output.trimmed_fastq1} -O {output.trimmed_fastq2} -i {input.fastq1} -I {input.fastq2} -h {output.html_report}
         """
-
-#rule post_fastqc:
-#    input:
-#        fastq1=f"{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz",
-#        fastq2=f"{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz"
-#    output:
-#       html1=f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R1_fastqc.html",
-#        html2=f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R2_fastqc.html"
-#    #conda: 
-#    #    "../config/env.yaml"
-#    shell:
-#        """
-#        fastqc -o {RESULTS_DIR}/qc/fastqc -t {THREADS} {input.fastq1} {input.fastq2}
-#        """
 
 ###########################
 ##### PSEUDOALIGNMENT #####
@@ -137,15 +121,15 @@ rule kallisto_index:
 rule kallisto_quant:
     input:
         idx=f"{REF_DIR}/{ORGANISM}_{BUILD}.idx",
-        fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
-        fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
+        fastq1=f"{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz",
+        fastq2=f"{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz"
     output:
         abundance=f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv"
     #conda:
     #    "../config/env.yaml"
     shell:
         """
-        kallisto quant -i {input.idx} -o {RESULTS_DIR}/kallisto/{sample} -t {THREADS} {input.fastq1} {input.fastq2}
+        kallisto quant -i {input.idx} -o "{RESULTS_DIR}/kallisto/"  -t {THREADS} {input.fastq1} {input.fastq2}
         """
 
 ###########################
@@ -153,13 +137,13 @@ rule kallisto_quant:
 ###########################
 rule multiqc:
     input:
+        kallisto= expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES), # to be sure this runs last
         raw_dir={PROJECT_DATA_DIR},
         results_dir={RESULTS_DIR},
-        out_dir={REPORT_DIR}
     output:
         html=f"{REPORT_DIR}/multiqc_report.html"
 
     shell:
         """
-        multiqc {input.raw_dir} {input.results_dir} -o {input.out_dir}
+        multiqc {input.raw_dir} {input.results_dir} -o {REPORT_DIR}
         """

@@ -122,14 +122,16 @@ rule kallisto_quant:
     input:
         idx=f"{REF_DIR}/{ORGANISM}_{BUILD}.idx",
         fastq1=f"{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz",
-        fastq2=f"{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz"
+        fastq2=f"{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz",
+    params:
+        out_dir=f"{RESULTS_DIR}/kallisto/{{sample}}"
     output:
         abundance=f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv"
     #conda:
     #    "../config/env.yaml"
     shell:
         """
-        kallisto quant -i {input.idx} -o "{RESULTS_DIR}/kallisto/"  -t {THREADS} {input.fastq1} {input.fastq2}
+        kallisto quant -i {input.idx} -o {params.out_dir} -t {THREADS} {input.fastq1} {input.fastq2}
         """
 
 ###########################

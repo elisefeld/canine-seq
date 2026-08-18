@@ -15,6 +15,7 @@ THREADS = config["run"]["threads"]
 BASE_REF_DIR = config["path"]["reference_dir"]
 BASE_DATA_DIR = config["path"]["raw_data_dir"]
 BASE_RESULTS_DIR = config["path"]["results_dir"]
+BASE_REPORT_DIR = config["path"]["report_dir"]
 SAMPLE_SHEET = config["path"]["sample_sheet"]
 
 MRNA_REF = config["reference"]["mrna"]
@@ -23,6 +24,7 @@ PROJECT_DATA_DIR = f"{BASE_DATA_DIR}/{PROJECT}"
 SAMPLE_SHEET_PATH = f"{PROJECT_DATA_DIR}/{SAMPLE_SHEET}"
 REF_DIR = f"{BASE_REF_DIR}/{ORGANISM}/{BUILD}"
 RESULTS_DIR = f"{BASE_RESULTS_DIR}/{PROJECT}"
+REPORT_DIR = f"{BASE_REPORT_DIR}/{PROJECT}"
 
 SAMPLES = glob_wildcards(f'{PROJECT_DATA_DIR}/{{sample}}.cram').sample
 print("Samples found:", SAMPLES)
@@ -34,9 +36,12 @@ rule all:
         expand(f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R1_fastqc.html", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R2_fastqc.html", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/fastq/{{sample}}_R1_trimmed.fastq.gz", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/fastq/{{sample}}_R2_trimmed.fastq.gz", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R1_fastqc.html", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R2_fastqc.html", sample=SAMPLES),
         f"{REF_DIR}/refseq.mrna.idx",
+        f"{RESULTS_DIR}/multiqc/multiqc_report.html"
        # expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES)
 
 ###########################
@@ -69,7 +74,7 @@ rule extract_fastq:
         samtools fastq -@ {THREADS} -1 {output.fastq1} -2 {output.fastq2} {input.cram}
         """
 
-rule fastqc:
+rule pre_fastqc:
     input:
         fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
         fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
@@ -83,25 +88,34 @@ rule fastqc:
         fastqc -o {RESULTS_DIR}/qc/fastqc -t {THREADS} {input.fastq1} {input.fastq2}
         """
 
-
-# skip this for now?
-rule adapter_trim:
+rule adapter_trim: #this step didn't do much so reads were probably already trimmed
     input:
         fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
         fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
     output:
-        trimmed_fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1_trimmed.fastq.gz",
-        trimmed_fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2_trimmed.fastq.gz"
+        trimmed_fastq1=f"{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz",
+        trimmed_fastq2=f"{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz",
+        html_report=f"{RESULTS_DIR}/fastp/{{sample}}.html"
     #conda: 
     #    "../config/env.yaml"
     shell:
         """
-        fastp trim -V -o {output.trimmed_fastq1} -O {output.trimmed_fastq2} -i {input.fastq1} -I {input.fastq2}
+        fastp trim -V -o {output.trimmed_fastq1} -O {output.trimmed_fastq2} -i {input.fastq1} -I {input.fastq2} -h {output.html_report}
         """
 
-
-
-# multiqc
+rule post_fastqc:
+    input:
+        fastq1=f"{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz",
+        fastq2=f"{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz"
+    output:
+        html1=f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R1_fastqc.html",
+        html2=f"{RESULTS_DIR}/qc/fastqc/post_{{sample}}_R2_fastqc.html"
+    #conda: 
+    #    "../config/env.yaml"
+    shell:
+        """
+        fastqc -o {RESULTS_DIR}/qc/fastqc -t {THREADS} {input.fastq1} {input.fastq2}
+        """
 
 ###########################
 ##### PSEUDOALIGNMENT #####
@@ -136,3 +150,16 @@ rule kallisto_quant:
         kallisto quant -i {input.idx} -o {RESULTS_DIR}/kallisto/{{sample}} -t {THREADS} {input.fastq1} {input.fastq2}
         """
 
+rule multiqc:
+    input:
+        raw_dir={PROJECT_DATA_DIR}
+        results_dir={RESULTS_DIR}
+        out_dir={REPORT_DIR}
+        name=f"multiqc_report_{PROJECT}"
+    output:
+        html=f"{REPORT_DIR}/multiqc/multiqc_report.html"
+
+    shell:
+        """
+        multiqc {input.raw_dir} {input.results_dir} -o {input.out_dir} -n {input.name} 
+        """

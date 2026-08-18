@@ -19,10 +19,10 @@ SAMPLE_SHEET = config["path"]["sample_sheet"]
 
 MRNA_REF = config["reference"]["mrna"]
 
-PROJECT_DATA_DIR = "{BASE_DATA_DIR}/{PROJECT}"
-SAMPLE_SHEET_PATH = "{PROJECT_DATA_DIR}/{SAMPLE_SHEET}"
-REF_DIR = "{BASE_REF_DIR}/{ORGANISM}/{BUILD}"
-RESULTS_DIR = "{BASE_RESULTS_DIR}/{PROJECT}"
+PROJECT_DATA_DIR = f"{BASE_DATA_DIR}/{PROJECT}"
+SAMPLE_SHEET_PATH = f"{PROJECT_DATA_DIR}/{SAMPLE_SHEET}"
+REF_DIR = f"{BASE_REF_DIR}/{ORGANISM}/{BUILD}"
+RESULTS_DIR = f"{BASE_RESULTS_DIR}/{PROJECT}"
 
 SAMPLES = glob_wildcards(f'{PROJECT_DATA_DIR}/{{sample}}.cram').sample
 print("Samples found:", SAMPLES)
@@ -31,28 +31,28 @@ print("Samples found:", SAMPLES)
 rule all:
     input: 
         f"{REF_DIR}/refseq.mrna.idx",
-        expand(f"{RESULTS_DIR}/fastq/{{sample}}_1.fastq.gz", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/fastq/{{sample}}_2.fastq.gz", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/qc/fastqc{{sample}}_1_fastqc.html", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/qc/fastqc/{{sample}}_2_fastqc.html", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/qc/fastqc/{{sample}}_R1_fastqc.html", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.html", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES)
 
-rule kallisto_index:
-    input: 
-        fasta=f"{REF_DIR}/{MRNA_REF}" #is this the correct input file?
-    output: 
-        idx=f"{REF_DIR}/refseq.mrna.idx"
+rule flagstat:
+    input:
+        cram=f"{PROJECT_DATA_DIR}/{{sample}}.cram",
+    output:
+        flagstat=f"{RESULTS_DIR}/qc/flagstat/{{sample}}.txt"
     conda: 
         "config/env.yaml"
     shell:
         """
-        echo "Building kallisto index for {input.fasta}..."
-        kallisto index -i {output.idx} {input.fasta}
+        echo "Running samtools flagstat on {input.cram}..."
+        samtools flagstat {input.cram} > {output.flagstat}
         """
 
 rule extract_fastq:
     input:
-        cram=f"{RAW_DIR}/{{sample}}.cram",
+        cram=f"{PROJECT_DATA_DIR}/{{sample}}.cram",
     output:
         fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
         fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz",
@@ -82,8 +82,8 @@ rule fastqc:
         fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
         fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
     output:
-        html1=f"{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.html",
-        html2=f"{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.html"
+        html1=f"{RESULTS_DIR}/qc/fastqc/{{sample}}_R1_fastqc.html",
+        html2=f"{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.html"
     conda: 
         "config/env.yaml"
     shell:
@@ -92,6 +92,19 @@ rule fastqc:
         """
 
 # multiqc
+
+rule kallisto_index:
+    input: 
+        fasta=f"{REF_DIR}/{MRNA_REF}" #is this the correct input file?
+    output: 
+        idx=f"{REF_DIR}/refseq.mrna.idx"
+    conda: 
+        "config/env.yaml"
+    shell:
+        """
+        echo "Building kallisto index for {input.fasta}..."
+        kallisto index -i {output.idx} {input.fasta}
+        """
 
 rule kallisto_quant:
     input:
@@ -104,7 +117,6 @@ rule kallisto_quant:
         "config/env.yaml"
     shell:
         """
-        mkdir -p {RESULTS_DIR}/kallisto/{{wildcards.sample}}
-        kallisto quant -i {input.idx} -o {RESULTS_DIR}/kallisto/{{wildcards.sample}} -t {THREADS} {input.fastq1} {input.fastq2}
+        kallisto quant -i {input.idx} -o {RESULTS_DIR}/kallisto/{{sample}} -t {THREADS} {input.fastq1} {input.fastq2}
         """
 

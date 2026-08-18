@@ -124,14 +124,17 @@ rule kallisto_quant:
         fastq1=f"{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz",
         fastq2=f"{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz",
     params:
-        out_dir=f"{RESULTS_DIR}/kallisto/{{sample}}"
+        out_dir=f"{RESULTS_DIR}/kallisto/{{sample}}",
+        sample="{sample}"
     output:
         abundance=f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv"
     #conda:
     #    "../config/env.yaml"
+    log: 
+        f"{RESULTS_DIR}/logs/kallisto/{{sample}}.log"
     shell:
         """
-        kallisto quant -i {input.idx} -o {params.out_dir} -t {THREADS} {input.fastq1} {input.fastq2}
+        kallisto quant -i {input.idx} -o {params.out_dir} -t {THREADS} {input.fastq1} {input.fastq2} > {log} 2>&1
         """
 
 ###########################
@@ -140,8 +143,8 @@ rule kallisto_quant:
 rule multiqc:
     input:
         kallisto= expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES), # to be sure this runs last
-        raw_dir={PROJECT_DATA_DIR},
-        results_dir={RESULTS_DIR},
+        raw_dir=PROJECT_DATA_DIR,
+        results_dir=RESULTS_DIR,
     output:
         html=f"{REPORT_DIR}/multiqc_report.html"
 

@@ -29,9 +29,10 @@ reference:
   mrna: "refseq.mrna.fa.gz"
 
 path: # Do NOT change these unless you are confident in directory structure and file locations.
-  raw_data_dir: "resources/data/raw"
+  raw_data_dir: "resources/data"
   reference_dir: "resources/reference"
   results_dir: "results"
+  report_dir: "report"
   sample_sheet: "samples.csv"
 
  # add params for alignment algorithm

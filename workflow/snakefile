@@ -1,38 +1,47 @@
-# add reports html later
-# split into multiple snakefiles later
+# NOTES FOR LATER:
+# Add support for other organisms
+# Add reports in HTML format
+# Split snakefile into multiple smks
 
 configfile: "config/config.yaml"
-RAW_DIR = config["run"]["raw_data_dir"]
-REF_DIR = config["run"]["ref_dir"]
-RESULTS_DIR = config["run"]["results_dir"]
 
-THREADS = config["run"]["threads"]
 PROJECT = config["project"]["name"]
+ORGANISM = config["run"]["ref_organism"]
+BUILD = config["run"]["ref_build"]
+THREADS = config["run"]["threads"]
 
-SAMPLES = glob_wildcards(f'{RAW_DIR}/samples/{{sample}}.cram').sample
+SAMPLE_SHEET = "resources/data/raw/{PROJECT}/{SAMPLE_SHEET}"
+RAW_DIR = "resources/data/raw/{PROJECT}"
+REF_DIR = "resources/reference/{ORGANISM}/{BUILD}"
+RESULTS_DIR = "results/{PROJECT}"
+
+SAMPLES = glob_wildcards(f'{RAW_DIR}/{{sample}}.cram').sample
 print("Samples found:", SAMPLES)
 
-
+# need to add adapter trimming and quality control steps before kallisto quantification
 rule all:
     input: 
         f"{REF_DIR}/refseq.mrna.idx",
-        expand(f"{RESULTS_DIR}/temp/fastq/{{sample}}_1.fastq.gz", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/temp/fastq/{{sample}}_2.fastq.gz", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/fastq/{{sample}}_1.fastq.gz", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/fastq/{{sample}}_2.fastq.gz", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/qc/fastqc{{sample}}_1_fastqc.html", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/qc/fastqc/{{sample}}_2_fastqc.html", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES)
 
-rule k_index:
+rule kallisto_index:
     input: 
-        fasta=f"{REF_DIR}/refseq.mrna.fa.gz"
+        fasta=f"{REF_DIR}/refseq.mrna.fa.gz" #is this the correct input file?
     output: 
         idx=f"{REF_DIR}/refseq.mrna.idx"
     shell:
         """
+        echo "Building kallisto index for {input.fasta}..."
         kallisto index -i {output.idx} {input.fasta}
         """
 
 rule extract_fastq:
     input:
-        cram=f"{RAW_DIR}/samples/{{sample}}.cram",
+        cram=f"{RAW_DIR}/{{sample}}.cram",
     output:
         fastq1=f"{RESULTS_DIR}/temp/fastq/{{sample}}_1.fastq.gz",
         fastq2=f"{RESULTS_DIR}/temp/fastq/{{sample}}_2.fastq.gz",
@@ -41,6 +50,17 @@ rule extract_fastq:
         mkdir -p {RESULTS_DIR}/temp
         mkdir -p {RESULTS_DIR}/temp/fastq
         samtools fastq -@ {THREADS} -1 {output.fastq1} -2 {output.fastq2} {input.cram}
+        """
+
+rule adapter_trim:
+    input:
+        fastq1=f"{RESULTS_DIR}/temp/fastq/{{sample}}_1.fastq.gz",
+        fastq2=f"{RESULTS_DIR}/temp/fastq/{{sample}}_2.fastq.gz"
+    output:
+        trimmed_fastq1=f"{RESULTS_DIR}/temp/fastq/{{sample}}_1.trimmed.fastq.gz",
+        trimmed_fastq2=f"{RESULTS_DIR}/temp/fastq/{{sample}}_2.trimmed.fastq.gz"
+    shell:
+        """
         """
 
 rule fastqc:
@@ -55,6 +75,8 @@ rule fastqc:
         mkdir -p {RESULTS_DIR}/temp/fastqc
         fastqc -o {RESULTS_DIR}/temp/fastqc -t {THREADS} {input.fastq1} {input.fastq2}
         """
+
+# multiqc
 
 rule kallisto_quant:
     input:

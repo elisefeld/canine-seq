@@ -8,19 +8,16 @@ project:
   PI: Shruthi Naik
 
 run:
+  sample_sheet: "samples.csv"
   ref_organism: dog
   ref_build: canfam4
   threads: 4
-  raw_data_dir: "resources/data/raw/ORBIT" # edit to auto reference from project name
-  sample_sheet: "resources/data/raw/ORBIT/sample_sheet.csv" # later can auto parse file names into sample sheet
-  ref_dir: "resources/reference/dog/canfam4" # edit to auto reference from project name
-  results_dir: "results/ORBIT" # edit to auto reference from project name
   logging_level: INFO # add logging later
 
 reference:
-    genome: "resources/reference/dog/canFam4.fa.gz"
-    gtf: "resources/reference/dog/canFam4ncbiRefSeq.gtf.gz"
-    mrna: "resources/reference/dog/refseq.mrna.fa.gz"
+    genome: "canFam4.fa.gz"
+    gtf: "canFam4ncbiRefSeq.gtf.gz"
+    mrna: "refseq.mrna.fa.gz"
 
  # add params for alignment algorithm
 

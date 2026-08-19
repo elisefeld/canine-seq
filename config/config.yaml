@@ -25,8 +25,8 @@ run:
   run_by: Elise Hachfeld
 
 reference: #ideally create a rule to download these directly
-  genome: "Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.dna.toplevel.fa.gz" #https://ftp.ensembl.org/pub/release-116/fasta/canis_lupus_familiarisgsd/dna
-  gtf: "Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.116.gtf.gz" #https://ftp.ensembl.org/pub/release-116/gtf/canis_lupus_familiarisgsd/
+  #genome: "Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.dna.toplevel.fa.gz" #https://ftp.ensembl.org/pub/release-116/fasta/canis_lupus_familiarisgsd/dna
+  #gtf: "Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.116.gtf.gz" #https://ftp.ensembl.org/pub/release-116/gtf/canis_lupus_familiarisgsd/
   cdna: "Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.cdna.all.fa.gz" #https://ftp.ensembl.org/pub/release-116/fasta/canis_lupus_familiarisgsd/cdna/
 
 path: # Do NOT change these unless you are confident in directory structure and file locations.

@@ -5,187 +5,185 @@ import pandas as pd
 ###########################
 ###### CONFIGURATION ######
 ###########################
-configfile: "config/config.yaml"
+configfile: 'config/config.yaml'
 
-PROJECT = config["project"]["name"]
-ORGANISM = config["run"]["ref_organism"]
-BUILD = config["run"]["ref_build"]
-THREADS = config["run"]["threads"]
+PROJECT = config['project']['name']
+ORGANISM = config['run']['ref_organism']
+BUILD = config['run']['ref_build']
 
 # Directory declaration and creation
-DATA_DIR = os.path.join(config["path"]["raw_data_dir"], PROJECT) 
-RESULTS_DIR = os.path.join(config["path"]["results_dir"], PROJECT)
-REPORT_DIR = os.path.join(config["path"]["report_dir"], PROJECT)
-REF_DIR = os.path.join(config["path"]["reference_dir"], ORGANISM, BUILD)
+DATA_DIR = os.path.join(config['path']['raw_data_dir'], PROJECT) 
+RESULTS_DIR = os.path.join(config['path']['results_dir'], PROJECT)
+REPORT_DIR = os.path.join(config['path']['report_dir'], PROJECT)
+REF_DIR = os.path.join(config['path']['reference_dir'], ORGANISM, BUILD)
 dirs = [DATA_DIR, RESULTS_DIR, REPORT_DIR, REF_DIR]
 
 for dir in dirs:
     os.makedirs(dir,exist_ok=True)
-    print(f"Project directory \"{dir}\" created successfully")
+    print(f'Project directory \'{dir}\' created successfully')
 
 # File declaration and checks
-SAMPLE_SHEET = os.path.join(DATA_DIR, config["run"]["sample_sheet"])
-CDNA_REF = os.path.join(REF_DIR, config["reference"]["cdna"])
+SAMPLE_SHEET = os.path.join(DATA_DIR, config['run']['sample_sheet'])
+CDNA_REF = os.path.join(REF_DIR, config['reference']['cdna'])
 files = [SAMPLE_SHEET, CDNA_REF]
 
 for file in files:
     if os.path.exists(file):
-        print(f"File \"{file}\" located successfully")
+        print(f'File \'{file}\' located successfully')
     else:
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file)
          
 # Identifying samples from sample sheet and data directory
-samples_df = pd.read_csv(SAMPLE_SHEET, sep = ",")
-samples_sheet = samples_df["sample_id"].tolist()
+samples_df = pd.read_csv(SAMPLE_SHEET, sep = ',')
+samples_sheet = samples_df['sample_id'].tolist()
 samples_data = glob_wildcards(f'{DATA_DIR}/{{sample}}.cram').sample
 
 if len(samples_sheet) > 0:
-    print(f"{len(samples_sheet)} samples found in sample sheet ({SAMPLE_SHEET}):")
+    print(f'{len(samples_sheet)} samples found in sample sheet ({SAMPLE_SHEET}):')
     for sample in samples_sheet:
-        print(f"- {sample}")
+        print(f'- {sample}')
 else:
-    raise ValueError(f"No samples found in sample sheet ({SAMPLE_SHEET})")
+    raise ValueError(f'No samples found in sample sheet ({SAMPLE_SHEET})')
 
 
 if len(samples_data) > 0:
-    print(f"{len(samples_data)} samples found in data directory ({DATA_DIR}):")
+    print(f'{len(samples_data)} samples found in data directory ({DATA_DIR}):')
     for sample in samples_data:
-        print(f"- {sample}")
+        print(f'- {sample}')
 else:
-    raise ValueError("No samples found in sample sheet")
+    raise ValueError('No samples found in sample sheet')
 
 SAMPLES = (set(samples_sheet) & set(samples_data)) # samples present in both locations
 MISSING = sorted(set(samples_sheet) - set(samples_data)) # samples listed in sample sheet but missing from data directory
 
 if MISSING:
-    print(f"WARNING: {len(MISSING)} samples from the sample sheet ({SAMPLE_SHEET} were not found in data directory ({DATA_DIR}):")
+    print(f'WARNING: {len(MISSING)} samples from the sample sheet ({SAMPLE_SHEET} were not found in data directory ({DATA_DIR}):')
     for sample in MISSING:
-        print(f"- {sample}")
+        print(f'- {sample}')
 
-print(f"Found {len(SAMPLES)} valid samples")
+print(f'Found {len(SAMPLES)} valid samples:')
 for sample in SAMPLES:
-        print(f"- {sample}")
+        print(f'- {sample}')
+
 
 rule all:
     input: 
-        expand(f"{RESULTS_DIR}/qc/flagstat/{{sample}}.txt", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R1_fastqc.html", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R2_fastqc.html", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz", sample=SAMPLES),
-        f"{REF_DIR}/{ORGANISM}_{BUILD}.idx",
-        expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES),
-        f"{REPORT_DIR}/multiqc_report.html"
+        expand(f'{RESULTS_DIR}/qc/flagstat/{{sample}}.txt', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R1_fastqc.html', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R2_fastqc.html', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz', sample=SAMPLES),
+        f'{REF_DIR}/{ORGANISM}_{BUILD}.idx',
+        expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES),
+        f'{REPORT_DIR}/multiqc_report.html'
         
 
 ###########################
 ## QUALITY CONTROL RULES ##
 ###########################
 rule flagstat:
-    input:
-        cram=f"{DATA_DIR}/{{sample}}.cram",
-    output:
-        flagstat=f"{RESULTS_DIR}/qc/flagstat/{{sample}}.txt"
-    #conda: 
-    #    "../config/env.yaml"
+    input: 
+        cram=f'{DATA_DIR}/{{sample}}.cram',
+    output: 
+        txt=f'{RESULTS_DIR}/qc/flagstat/{{sample}}.txt'
     shell:
-        """
-        echo "Running samtools flagstat on {input.cram}..."
-        samtools flagstat {input.cram} > {output.flagstat}
-        """
+        '''
+        echo 'Running samtools flagstat on {input.cram}...'
+        samtools flagstat {input.cram} > {output.txt}
+        '''
 
-rule extract_fastq:
-    input:
-        cram=f"{DATA_DIR}/{{sample}}.cram",
+rule fastq:
+    input: 
+        cram=f'{DATA_DIR}/{{sample}}.cram',
     output:
-        fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
-        fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz",
-    #conda: 
-    #    "../config/env.yaml"
+        fastq1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        fastq2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz',
+    threads: 
+        config['threads']['fastq']
     shell:
-        """
-        echo "Extracting FASTQ files from {input.cram}..."
-        samtools fastq -@ {THREADS} -1 {output.fastq1} -2 {output.fastq2} {input.cram}
-        """
+        '''
+        echo 'Extracting FASTQ files from {input.cram}...'
+        samtools fastq -@ {threads} -1 {output.fastq1} -2 {output.fastq2} {input.cram}
+        '''
 
-rule pre_fastqc:
+rule fastqc:
     input:
-        fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
-        fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
+        fastq1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        fastq2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        html1=f"{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R1_fastqc.html",
-        html2=f"{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R2_fastqc.html"
-    #conda: 
-    #    "../config/env.yaml"
+        html1=f'{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R1_fastqc.html',
+        html2=f'{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R2_fastqc.html'
+    threads:
+        config['threads']['fastqc']
     shell:
-        """
-        fastqc -o {RESULTS_DIR}/qc/fastqc -t {THREADS} {input.fastq1} {input.fastq2}
-        """
+        '''
+        fastqc -o {RESULTS_DIR}/qc/fastqc -t {threads} {input.fastq1} {input.fastq2}
+        '''
 
 rule adapter_trim: #this step didn't do much so reads were probably already trimmed
     input:
-        fastq1=f"{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz",
-        fastq2=f"{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz"
+        fastq1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        fastq2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        trimmed_fastq1=f"{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz",
-        trimmed_fastq2=f"{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz",
-        html_report=f"{RESULTS_DIR}/qc/fastp/{{sample}}.html"
-    #conda: 
-    #    "../config/env.yaml"
+        trimmed_fastq1=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_fastq2=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz',
+        html_report=f'{RESULTS_DIR}/qc/fastp/{{sample}}.html'
     shell:
-        """
+        '''
         fastp trim -V -o {output.trimmed_fastq1} -O {output.trimmed_fastq2} -i {input.fastq1} -I {input.fastq2} -h {output.html_report}
-        """
+        '''
 
 ###########################
 ##### PSEUDOALIGNMENT #####
 ###########################
 rule kallisto_index:
     input: 
-        fasta=f"{REF_DIR}/{CDNA_REF}"
+        fasta=f'{REF_DIR}/{CDNA_REF}'
     output: 
-        idx=f"{REF_DIR}/{ORGANISM}_{BUILD}.idx"
+        idx=f'{REF_DIR}/{ORGANISM}_{BUILD}.idx'
     #conda: 
-    #    "../config/env.yaml"
+    #    '../config/env.yaml'
     shell:
-        """
-        echo "Building kallisto index for {input.fasta}..."
+        '''
+        echo 'Building kallisto index for {input.fasta}...'
         kallisto index -i {output.idx} {input.fasta}
-        """
+        '''
 
 rule kallisto_quant:
     input:
-        idx=f"{REF_DIR}/{ORGANISM}_{BUILD}.idx",
-        fastq1=f"{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz",
-        fastq2=f"{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz",
+        idx=f'{REF_DIR}/{ORGANISM}_{BUILD}.idx',
+        fastq1=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        fastq2=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz',
     params:
-        out_dir=f"{RESULTS_DIR}/kallisto/{{sample}}",
-        sample="{sample}"
+        out_dir=f'{RESULTS_DIR}/kallisto/{{sample}}',
+        sample='{sample}'
     output:
-        abundance=f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv"
+        abundance=f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv'
     #conda:
-    #    "../config/env.yaml"
+    #    '../config/env.yaml'
     log: 
-        f"{RESULTS_DIR}/logs/kallisto/{{sample}}.log"
+        f'{RESULTS_DIR}/logs/kallisto/{{sample}}.log'
+    threads:
+        config['threads']['kallisto']
     shell:
-        """
-        kallisto quant -i {input.idx} -o {params.out_dir} -t {THREADS} {input.fastq1} {input.fastq2} > {log} 2>&1
-        """
+        '''
+        kallisto quant -i {input.idx} -o {params.out_dir} -t {threads} {input.fastq1} {input.fastq2} > {log} 2>&1
+        '''
 
 ###########################
 ######### REPORT ##########
 ###########################
 rule multiqc:
     input:
-        kallisto= expand(f"{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv", sample=SAMPLES), # to be sure this runs last
+        kallisto= expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES), # to be sure this runs last
         raw_dir=DATA_DIR,
         results_dir=RESULTS_DIR,
     output:
-        html=f"{REPORT_DIR}/multiqc_report.html"
+        html=f'{REPORT_DIR}/multiqc_report.html'
 
     shell:
-        """
+        '''
         multiqc {input.raw_dir} {input.results_dir} -o {REPORT_DIR}
-        """
+        '''

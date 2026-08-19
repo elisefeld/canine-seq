@@ -122,7 +122,7 @@ rule fastqc:
         fastqc -o {RESULTS_DIR}/qc/fastqc -t {threads} {input.fastq1} {input.fastq2}
         '''
 
-rule adapter_trim: #this step didn't do much so reads were probably already trimmed
+rule fastp: #this step didn't do much so reads were probably already trimmed
     input:
         fastq1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
         fastq2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
@@ -130,9 +130,11 @@ rule adapter_trim: #this step didn't do much so reads were probably already trim
         trimmed_fastq1=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz',
         trimmed_fastq2=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz',
         html_report=f'{RESULTS_DIR}/qc/fastp/{{sample}}.html'
+    threads:
+        config['fastp']['threads']
     shell:
         '''
-        fastp trim -V -o {output.trimmed_fastq1} -O {output.trimmed_fastq2} -i {input.fastq1} -I {input.fastq2} -h {output.html_report}
+        fastp -V --thread {threads} -o {output.trimmed_fastq1} -O {output.trimmed_fastq2} -i {input.fastq1} -I {input.fastq2} -h {output.html_report}
         '''
 
 ###########################

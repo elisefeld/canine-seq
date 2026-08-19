@@ -40,6 +40,9 @@ fastq:
 fastqc:
   threads: 4
 
+fastp:
+  threads: 4
+
 kallisto:
   threads: 4
   

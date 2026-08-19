@@ -157,8 +157,8 @@ rule kallisto_index:
 rule kallisto_quant:
     input:
         idx=f'{REF_DIR}/{ORGANISM}_{BUILD}.idx',
-        fastq1=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        fastq2=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz',
+        trimmed_read1=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_read2=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz',
     params:
         out_dir=f'{RESULTS_DIR}/kallisto/{{sample}}',
         sample='{sample}'
@@ -172,6 +172,7 @@ rule kallisto_quant:
         config['kallisto']['threads']
     shell:
         '''
+        echo 'Running kallisto pseudoalignment for {input.trimmed_read1} and {input.trimmed_read2}'
         kallisto quant -i {input.idx} -o {params.out_dir} -t {threads} {input.fastq1} {input.fastq2} > {log} 2>&1
         '''
 

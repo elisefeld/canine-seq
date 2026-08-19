@@ -23,11 +23,6 @@ run:
   logging_level: INFO # add logging later
   run_by: Elise Hachfeld
 
-threads:
-  fastq: 4
-  fastqc: 4
-  kallisto: 4
-
 reference: #ideally create a rule to download these directly
   #genome: "Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.dna.toplevel.fa.gz" #https://ftp.ensembl.org/pub/release-116/fasta/canis_lupus_familiarisgsd/dna
   #gtf: "Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.116.gtf.gz" #https://ftp.ensembl.org/pub/release-116/gtf/canis_lupus_familiarisgsd/
@@ -39,3 +34,12 @@ path: # Do NOT change these unless you are confident in directory structure and 
   results_dir: "results"
   report_dir: "report"
 
+fastq:
+  threads: 4
+
+fastqc:
+  threads: 4
+
+kallisto:
+  threads: 4
+  

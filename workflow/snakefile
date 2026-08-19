@@ -98,14 +98,14 @@ rule fastq:
     input: 
         cram=f'{DATA_DIR}/{{sample}}.cram',
     output:
-        fastq1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
-        fastq2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz',
+        read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz',
     threads: 
         config['fastq']['threads']
     shell:
         '''
         echo 'Extracting FASTQ files from {input.cram}...'
-        samtools fastq -@ {threads} -1 {output.fastq1} -2 {output.fastq2} {input.cram}
+        samtools fastq -@ {threads} -1 {output.read1} -2 {output.read2} {input.cram}
         '''
 
 rule fastqc:

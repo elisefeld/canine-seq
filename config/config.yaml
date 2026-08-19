@@ -17,6 +17,7 @@ seq:
   lane: 1
 
 run:
+  sample_sheet: "sample_sheet.csv"
   ref_organism: dog
   ref_build: canfam4
   threads: 4
@@ -29,11 +30,8 @@ reference: #ideally create a rule to download these directly
   cdna: "Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.cdna.all.fa.gz" #https://ftp.ensembl.org/pub/release-116/fasta/canis_lupus_familiarisgsd/cdna/
 
 path: # Do NOT change these unless you are confident in directory structure and file locations.
-  raw_data_dir: "resources/data"
-  reference_dir: "resources/reference"
+  raw_data_dir: "data"
+  reference_dir: "reference"
   results_dir: "results"
   report_dir: "report"
-  sample_sheet: "samples.csv"
-
- # add params for alignment algorithm
 

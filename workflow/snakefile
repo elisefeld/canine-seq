@@ -1,10 +1,12 @@
-# NOTES FOR LATER:
-# Create step that parses sample sheet from file names
-# Add support for other organisms
-# Add reports in HTML format
-# Split snakefile into multiple smks
+import os
+import pandas as pd
 
 configfile: "config/config.yaml"
+
+SAMPLE_SHEET = 
+SAMPLE_SHEET = config["path"]["sample_sheet"]
+
+
 
 PROJECT = config["project"]["name"]
 
@@ -16,7 +18,7 @@ BASE_REF_DIR = config["path"]["reference_dir"]
 BASE_DATA_DIR = config["path"]["raw_data_dir"]
 BASE_RESULTS_DIR = config["path"]["results_dir"]
 BASE_REPORT_DIR = config["path"]["report_dir"]
-SAMPLE_SHEET = config["path"]["sample_sheet"]
+
 
 CDNA_REF = config["reference"]["cdna"]
 

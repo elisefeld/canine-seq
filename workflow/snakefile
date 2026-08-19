@@ -101,7 +101,7 @@ rule fastq:
         fastq1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
         fastq2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz',
     threads: 
-        config['threads']['fastq']
+        config['fastq']['threads']
     shell:
         '''
         echo 'Extracting FASTQ files from {input.cram}...'
@@ -116,7 +116,7 @@ rule fastqc:
         html1=f'{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R1_fastqc.html',
         html2=f'{RESULTS_DIR}/qc/fastqc/pre_{{sample}}_R2_fastqc.html'
     threads:
-        config['threads']['fastqc']
+        config['fastqc']['threads']
     shell:
         '''
         fastqc -o {RESULTS_DIR}/qc/fastqc -t {threads} {input.fastq1} {input.fastq2}
@@ -143,8 +143,8 @@ rule kallisto_index:
         fasta=f'{REF_DIR}/{CDNA_REF}'
     output: 
         idx=f'{REF_DIR}/{ORGANISM}_{BUILD}.idx'
-    #conda: 
-    #    '../config/env.yaml'
+    threads:
+        config['kallisto']['threads']
     shell:
         '''
         echo 'Building kallisto index for {input.fasta}...'
@@ -161,12 +161,10 @@ rule kallisto_quant:
         sample='{sample}'
     output:
         abundance=f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv'
-    #conda:
-    #    '../config/env.yaml'
     log: 
         f'{RESULTS_DIR}/logs/kallisto/{{sample}}.log'
     threads:
-        config['threads']['kallisto']
+        config['kallisto']['threads']
     shell:
         '''
         kallisto quant -i {input.idx} -o {params.out_dir} -t {threads} {input.fastq1} {input.fastq2} > {log} 2>&1
@@ -182,7 +180,6 @@ rule multiqc:
         results_dir=RESULTS_DIR,
     output:
         html=f'{REPORT_DIR}/multiqc_report.html'
-
     shell:
         '''
         multiqc {input.raw_dir} {input.results_dir} -o {REPORT_DIR}

@@ -1,9 +1,9 @@
 __pycache__
 *.pyc
 internal_notes.md
-resources/data/*
+data/*
 results/*
 .snakemake
-resources/reference/*
+reference/*
 report/*
 *.html

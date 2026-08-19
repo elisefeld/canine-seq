@@ -99,6 +99,7 @@ rule sort:
         f'{RESULTS_DIR}/logs/sort/{{sample}}_samtoolssort.log'
     shell:
         '''
+        echo 'Sorting {input.cram} by name...'
         samtools sort -n -o {output.sorted_cram} {input.cram} &> {log}
         '''
 
@@ -114,8 +115,8 @@ rule fastq:
         f'{RESULTS_DIR}/logs/fastq/{{sample}}_fastq.log'
     shell:
         '''
-        echo 'Extracting FASTQ files from {input.cram}...'
-        samtools fastq -@ {threads} -1 {output.read1} -2 {output.read2} {input.cram} &> {log}
+        echo 'Extracting FASTQ files from {input.sorted_cram}...'
+        samtools fastq -@ {threads} -1 {output.read1} -2 {output.read2} {input.sorted_cram} &> {log}
         '''
 
 rule fastqc:
@@ -167,7 +168,7 @@ rule kallisto_index:
     threads:
         config['kallisto']['threads']
     log:
-        f'{RESULTS_DIR}/logs/kallisto/{{sample}}_kallistoindex.log'
+        f'{RESULTS_DIR}/logs/kallisto/kallistoindex.log'
     shell:
         '''
         echo 'Building kallisto index for {input.fasta}...'
@@ -193,7 +194,7 @@ rule kallisto_quant:
     shell:
         '''
         echo 'Running kallisto pseudoalignment for {input.trimmed_read1} and {input.trimmed_read2}'
-        kallisto quant -i {input.idx} -o {params.out_dir} -t {threads} {input.fastq1} {input.fastq2} &> {log}
+        kallisto quant -i {input.idx} -o {params.out_dir} -t {threads} {input.trimmed_read1} {input.trimmed_read2} &> {log}
         '''
 
 ###########################

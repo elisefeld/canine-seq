@@ -90,18 +90,32 @@ rule flagstat:
         samtools flagstat {input.cram} > {output.txt}
         '''
 
+rule sort:
+    input:
+        cram=f'{DATA_DIR}/{{sample}}.cram',
+    output:
+        sorted_cram=f'{RESULTS_DIR}/sort/{{sample}}.cram'
+    log:
+        f'{RESULTS_DIR}/logs/sort/{{sample}}_samtoolssort.log'
+    shell:
+        '''
+        samtools sort -n -o {output.sorted_cram} {input.cram} &> {log}
+        '''
+
 rule fastq:
     input: 
-        cram=f'{DATA_DIR}/{{sample}}.cram',
+        sorted_cram=f'{RESULTS_DIR}/sort/{{sample}}.cram',
     output:
         read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
         read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz',
     threads: 
         config['fastq']['threads']
+    log:
+        f'{RESULTS_DIR}/logs/fastq/{{sample}}_fastq.log'
     shell:
         '''
         echo 'Extracting FASTQ files from {input.cram}...'
-        samtools fastq -@ {threads} -1 {output.read1} -2 {output.read2} {input.cram}
+        samtools fastq -@ {threads} -1 {output.read1} -2 {output.read2} {input.cram} &> {log}
         '''
 
 rule fastqc:
@@ -115,10 +129,12 @@ rule fastqc:
         zip2=f'{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.zip',
     threads:
         config['fastqc']['threads']
+    log:
+        f'{RESULTS_DIR}/logs/fastqc/{{sample}}_fastqc.log'
     shell:
         '''
         echo 'Running a quality control report for {input.read1} and {input.read2}...'
-        fastqc -o {RESULTS_DIR}/qc/fastqc -t {threads} {input.read1} {input.read2}
+        fastqc -o {RESULTS_DIR}/qc/fastqc -t {threads} {input.read1} {input.read2} &> {log}
         '''
 
 rule fastp:
@@ -132,10 +148,12 @@ rule fastp:
         json=f'{RESULTS_DIR}/qc/fastp/{{sample}}.json'
     threads:
         config['fastp']['threads']
+    log:
+        f'{RESULTS_DIR}/logs/fastp/{{sample}}_fastp.log'
     shell:
         '''
         echo 'Trimming reads for {input.read1} and {input.read2}...'
-        fastp -V --thread {threads} -o {output.trimmed_read1} -O {output.trimmed_read2} -i {input.read1} -I {input.read2} -h {output.html} -j {output.json}
+        fastp -V --thread {threads} -o {output.trimmed_read1} -O {output.trimmed_read2} -i {input.read1} -I {input.read2} -h {output.html} -j {output.json} &> {log}
         '''
 
 ###########################
@@ -148,10 +166,12 @@ rule kallisto_index:
         idx=f'{REF_DIR}/{ORGANISM}_{BUILD}.idx'
     threads:
         config['kallisto']['threads']
+    log:
+        f'{RESULTS_DIR}/logs/kallisto/{{sample}}_kallistoindex.log'
     shell:
         '''
         echo 'Building kallisto index for {input.fasta}...'
-        kallisto index -i {output.idx} {input.fasta} -t {threads}
+        kallisto index -i {output.idx} {input.fasta} -t {threads} &> {log}
         '''
 
 rule kallisto_quant:
@@ -167,13 +187,13 @@ rule kallisto_quant:
         h5=f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.h5',
         json=f'{RESULTS_DIR}/kallisto/{{sample}}/run_info.json'
     log: 
-        f'{RESULTS_DIR}/kallisto/{{sample}}/{{sample}}.log'
+        f'{RESULTS_DIR}/logs/{{sample}}_kallistoquant.log'
     threads:
         config['kallisto']['threads']
     shell:
         '''
         echo 'Running kallisto pseudoalignment for {input.trimmed_read1} and {input.trimmed_read2}'
-        kallisto quant -i {input.idx} -o {params.out_dir} -t {threads} {input.fastq1} {input.fastq2} > {log} 2>&1
+        kallisto quant -i {input.idx} -o {params.out_dir} -t {threads} {input.fastq1} {input.fastq2} &> {log}
         '''
 
 ###########################
@@ -186,10 +206,12 @@ rule multiqc:
         expand(f'{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.zip', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/qc/fastp/{{sample}}.json', sample = SAMPLES),
         expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES),
-        expand(f'{RESULTS_DIR}/kallisto/{{sample}}/{{sample}}.log', sample=SAMPLES)
+        expand(f'{RESULTS_DIR}/logs/{{sample}}_kallistoquant.log', sample=SAMPLES)
     output:
         html=f'{REPORT_DIR}/multiqc_report.html'
+    log: 
+        f'{RESULTS_DIR}/logs/multiqc.log'
     shell:
         '''
-        multiqc {DATA_DIR} {RESULTS_DIR} -o {REPORT_DIR}
+        multiqc {DATA_DIR} {RESULTS_DIR} -o {REPORT_DIR} &> {log}
         '''

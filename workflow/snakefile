@@ -8,53 +8,48 @@ import pandas as pd
 configfile: 'config/config.yaml'
 
 PROJECT = config['project']['name']
-ORGANISM = config['run']['ref_organism']
+SPECIES = config['run']['ref_species']
 BUILD = config['run']['ref_build']
+RELEASE = config['run']['ref_release']
 
 # Directory declaration and creation
 DATA_DIR = os.path.join(config['path']['raw_data_dir'], PROJECT) 
 RESULTS_DIR = os.path.join(config['path']['results_dir'], PROJECT)
 REPORT_DIR = os.path.join(config['path']['report_dir'], PROJECT)
-REF_DIR = os.path.join(config['path']['reference_dir'], ORGANISM, BUILD)
+REF_DIR = os.path.join(config['path']['reference_dir'], SPECIES, f'release-{RELEASE}_BUILD')
 dirs = [DATA_DIR, RESULTS_DIR, REPORT_DIR, REF_DIR]
-
 for dir in dirs:
     os.makedirs(dir,exist_ok=True)
     print(f'Project directory \'{dir}\' created successfully')
 
 # File declaration and checks
 SAMPLE_SHEET = os.path.join(DATA_DIR, config['run']['sample_sheet'])
-CDNA_REF = os.path.join(REF_DIR, config['reference']['cdna'])
-files = [SAMPLE_SHEET, CDNA_REF]
-
-for file in files:
-    if os.path.exists(file):
-        print(f'File \'{file}\' located successfully')
-    else:
-        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file)
+if os.path.exists(SAMPLE_SHEET)
+    print(f'File \'{SAMPLE_SHEET}\' located successfully')
+else:
+    raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file)
          
 # Identifying samples from sample sheet and data directory
 samples_df = pd.read_csv(SAMPLE_SHEET, sep = ',')
-samples_sheet = samples_df['sample_id'].tolist()
-samples_data = glob_wildcards(f'{DATA_DIR}/{{sample}}.cram').sample
+sample_sheet = samples_df['sample_id'].tolist()
+sample_data = glob_wildcards(f'{DATA_DIR}/{{sample}}.cram').sample
 
-if len(samples_sheet) > 0:
-    print(f'{len(samples_sheet)} samples found in sample sheet ({SAMPLE_SHEET}):')
-    for sample in samples_sheet:
+if len(sample_sheet) > 0:
+    print(f'{len(sample_sheet)} samples found in sample sheet ({SAMPLE_SHEET}):')
+    for sample in sample_sheet:
         print(f'- {sample}')
 else:
     raise ValueError(f'No samples found in sample sheet ({SAMPLE_SHEET})')
 
-
-if len(samples_data) > 0:
-    print(f'{len(samples_data)} samples found in data directory ({DATA_DIR}):')
-    for sample in samples_data:
+if len(sample_data) > 0:
+    print(f'{len(sample_data)} samples found in data directory ({DATA_DIR}):')
+    for sample in sample_data:
         print(f'- {sample}')
 else:
     raise ValueError('No samples found in sample sheet')
 
-SAMPLES = (set(samples_sheet) & set(samples_data)) # samples present in both locations
-MISSING = sorted(set(samples_sheet) - set(samples_data)) # samples listed in sample sheet but missing from data directory
+SAMPLES = (set(sample_sheet) & set(sample_data)) # samples present in both locations
+MISSING = sorted(set(sample_sheet) - set(sample_data)) # samples listed in sample sheet but missing from data directory
 
 if MISSING:
     print(f'WARNING: {len(MISSING)} samples from the sample sheet ({SAMPLE_SHEET} were not found in data directory ({DATA_DIR}):')
@@ -65,7 +60,7 @@ print(f'Found {len(SAMPLES)} valid samples:')
 for sample in SAMPLES:
         print(f'- {sample}')
 
-
+# Declaring desired outputs for the pipeline
 rule all:
     input: 
         expand(f'{RESULTS_DIR}/qc/flagstat/{{sample}}.txt', sample=SAMPLES),
@@ -75,6 +70,48 @@ rule all:
         expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES), #*
         f'{REPORT_DIR}/multiqc_report.html' #*
         
+###########################
+###### DATA DOWNLOAD ######
+###########################
+rule get_cdna:
+    output: 
+        f'{REF_DIR}/{SPECIES}.{BUILD}.cdna.all.fa.gz'
+    shell:
+        '''
+        wget -P {REF_DIR} 'http://ftp.ensembl.org/pub/release-{RELEASE}/fasta/{SPECIES}/cdna/{SPECIES}.{BUILD}.cdna.all.fa.gz'
+        '''
+
+rule get_genome:
+    output: 
+        f'{REF_DIR}/{SPECIES}.{BUILD}.dna.toplevel.fa.gz'
+        f'{REF_DIR}/{SPECIES}.{BUILD}.dna.toplevel.fa.gz.fai'
+    shell:
+        '''
+        wget -P {REF_DIR} 'http://ftp.ensembl.org/pub/release-{RELEASE}/fasta/{SPECIES}/dna_index/{SPECIES}.{BUILD}.dna.toplevel.fa.gz'
+        wget -P {REF_DIR}'http://ftp.ensembl.org/pub/release-{RELEASE}/fasta/{SPECIES}/dna_index/{SPECIES}.{BUILD}.dna.toplevel.fa.gz.fai'
+        '''
+
+rule get_annotation:
+    output: f'{REF_DIR}/{SPECIES}.{BUILD}.{RELEASE}.gtf.gz'
+    shell:
+        '''
+        wget -P {REF_DIR} 'http://ftp.ensembl.org/pub/release-{RELEASE}/gtf/{SPECIES}/{SPECIES}.{BUILD}.{RELEASE}.gtf.gz'
+        '''
+
+rule kallisto_index:
+    input: 
+        fasta=f'{REF_DIR}/{SPECIES}.{BUILD}.cdna.all.fa.gz'
+    output: 
+        idx=f'{REF_DIR}/{SPECIES}.{BUILD}.idx'
+    threads:
+        config['kallisto']['threads']
+    log:
+        f'{RESULTS_DIR}/logs/kallisto/kallistoindex.log'
+    shell:
+        '''
+        echo 'Building kallisto index for {input.fasta}...'
+        kallisto index -i {output.idx} {input.fasta} -t {threads} &> {log}
+        '''
 
 ###########################
 ## QUALITY CONTROL RULES ##
@@ -162,24 +199,10 @@ rule fastp:
 ###########################
 ##### PSEUDOALIGNMENT #####
 ###########################
-rule kallisto_index:
-    input: 
-        fasta=CDNA_REF
-    output: 
-        idx=f'{REF_DIR}/{ORGANISM}_{BUILD}.idx'
-    threads:
-        config['kallisto']['threads']
-    log:
-        f'{RESULTS_DIR}/logs/kallisto/kallistoindex.log'
-    shell:
-        '''
-        echo 'Building kallisto index for {input.fasta}...'
-        kallisto index -i {output.idx} {input.fasta} -t {threads} &> {log}
-        '''
 
 rule kallisto_quant:
     input:
-        idx=f'{REF_DIR}/{ORGANISM}_{BUILD}.idx',
+        idx=f'{REF_DIR}/{SPECIES}.{BUILD}.idx',
         trimmed_read1=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz',
         trimmed_read2=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz',
     params:

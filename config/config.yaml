@@ -1,7 +1,5 @@
-
 project:
   name: ORBIT # Name of project used to define input and output directories
-  organism: Canis lupus familiaris # Scientific name of organism
   tissue_type: Lymph Node
   sample_type: Fine Needle Aspirate
   disease: Cancer
@@ -12,21 +10,15 @@ seq:
   application_type: MRNAS 
   end_type: Paired
   read_length: 100
-  adapter_sequence: IAGGTCAGATA-CTACAAGATA
   flowcell_id: 20260602_LH00761_0167_A22K7HFLT1
   lane: 1
 
 run:
   sample_sheet: "sample_sheet.csv"
-  ref_organism: dog
-  ref_build: canfam4
-  logging_level: INFO # add logging later
+  ref_species: canis_lupus_familiarisgsd
+  ref_build: UU_Cfam_GSD_1.0
+  ref_release: 116
   run_by: Elise Hachfeld
-
-reference: #ideally create a rule to download these directly
-  #genome: "Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.dna.toplevel.fa.gz" #https://ftp.ensembl.org/pub/release-116/fasta/canis_lupus_familiarisgsd/dna
-  #gtf: "Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.116.gtf.gz" #https://ftp.ensembl.org/pub/release-116/gtf/canis_lupus_familiarisgsd/
-  cdna: "Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.cdna.all.fa.gz" #https://ftp.ensembl.org/pub/release-116/fasta/canis_lupus_familiarisgsd/cdna/
 
 path: # Do NOT change these unless you are confident in directory structure and file locations.
   raw_data_dir: "data"

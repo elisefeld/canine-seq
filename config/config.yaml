@@ -34,15 +34,18 @@ path: # Do NOT change these unless you are confident in directory structure and 
   results_dir: "results"
   report_dir: "report"
 
+samtools:
+  threads: 8
+  
 fastq:
-  threads: 4
+  threads: 8
 
 fastqc:
-  threads: 4
+  threads: 8
 
 fastp:
-  threads: 4
+  threads: 8
 
 kallisto:
-  threads: 4
+  threads: 8
   

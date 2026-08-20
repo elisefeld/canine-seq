@@ -72,8 +72,8 @@ rule all:
         expand(f'{RESULTS_DIR}/qc/fastqc/{{sample}}_R1_fastqc.html', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.html', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/qc/fastp/{{sample}}.json', sample=SAMPLES),
-        expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES),
-        f'{REPORT_DIR}/multiqc_report.html'
+        expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES), #*
+        f'{REPORT_DIR}/multiqc_report.html' #*
         
 
 ###########################
@@ -94,7 +94,9 @@ rule sort:
     input:
         cram=f'{DATA_DIR}/{{sample}}.cram',
     output:
-        sorted_cram=f'{RESULTS_DIR}/sort/{{sample}}.cram'
+        sorted_cram=temp(f'{RESULTS_DIR}/sort/{{sample}}.cram')
+    threads:
+        config['samtools']['threads']
     log:
         f'{RESULTS_DIR}/logs/sort/{{sample}}_samtoolssort.log'
     shell:
@@ -107,8 +109,8 @@ rule fastq:
     input: 
         sorted_cram=f'{RESULTS_DIR}/sort/{{sample}}.cram',
     output:
-        read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
-        read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz',
+        read1=temp(f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz'),
+        read2=temp(f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'),
     threads: 
         config['fastq']['threads']
     log:
@@ -143,8 +145,8 @@ rule fastp:
         read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
         read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        trimmed_read1=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        trimmed_read2=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz',
+        trimmed_read1=temp(f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz'),
+        trimmed_read2=temp(f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz'),
         html=f'{RESULTS_DIR}/qc/fastp/{{sample}}.html',
         json=f'{RESULTS_DIR}/qc/fastp/{{sample}}.json'
     threads:
@@ -188,7 +190,7 @@ rule kallisto_quant:
         h5=f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.h5',
         json=f'{RESULTS_DIR}/kallisto/{{sample}}/run_info.json'
     log: 
-        f'{RESULTS_DIR}/logs/{{sample}}_kallistoquant.log'
+        f'{RESULTS_DIR}/logs/kallisto/{{sample}}_kallistoquant.log'
     threads:
         config['kallisto']['threads']
     shell:
@@ -207,7 +209,7 @@ rule multiqc:
         expand(f'{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.zip', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/qc/fastp/{{sample}}.json', sample = SAMPLES),
         expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES),
-        expand(f'{RESULTS_DIR}/logs/{{sample}}_kallistoquant.log', sample=SAMPLES)
+        expand(f'{RESULTS_DIR}/logs/kallisto/{{sample}}_kallistoquant.log', sample=SAMPLES)
     output:
         html=f'{REPORT_DIR}/multiqc_report.html'
     log: 

@@ -7,7 +7,7 @@ project:
 
 seq:
   platform: Illumina NovaSeq X
-  application_type: MRNAS 
+  type: RNA-seq 
   end_type: Paired
   read_length: 100
   flowcell_id: 20260602_LH00761_0167_A22K7HFLT1

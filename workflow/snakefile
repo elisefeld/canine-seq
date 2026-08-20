@@ -60,6 +60,9 @@ print(f'Found {len(SAMPLES)} valid samples:')
 for sample in SAMPLES:
         print(f'- {sample}')
 
+
+print(f'Running analysis of {len(SAMPLES)} RNA-seq samples for {PROJECT} project. \nSpecies: {SPECIES} \nBuild: {BUILD} \nRelease: {RELEASE}')
+
 # Declaring desired outputs for the pipeline
 rule all:
     input: 
@@ -92,7 +95,8 @@ rule get_genome:
         '''
 
 rule get_annotation:
-    output: f'{REF_DIR}/{SPECIES}.{BUILD}.{RELEASE}.gtf.gz'
+    output: 
+        f'{REF_DIR}/{SPECIES}.{BUILD}.{RELEASE}.gtf.gz'
     shell:
         '''
         wget -P {REF_DIR} 'http://ftp.ensembl.org/pub/release-{RELEASE}/gtf/{SPECIES}/{SPECIES}.{BUILD}.{RELEASE}.gtf.gz'

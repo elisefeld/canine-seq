@@ -1,0 +1,103 @@
+---
+title: "tximport"
+output: html_document
+date: "2026-08-19"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+
+library(tidyverse)
+library(tximport)
+library(DEseq2)
+
+setwd("D:/canine-seq")
+wd <- getwd()
+```
+
+```{r}
+sample_sheet <- read.csv(file.path(wd, "/data/ORBIT/sample_sheet.csv"))
+
+gtf_file = paste0(wd, "/reference/dog/canfam4/", "Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.116.gtf.gz")
+gtf <- import(gtf_file)
+
+tx2gene <- mcols(gtf) |>
+  as.data.frame() |>
+  dplyr::select(transcript_id, gene_id, gene_name) |>
+  distinct() |>
+  dplyr::filter(!is.na(transcript_id))
+
+write.table(#move this to correct folder
+  tx2gene,
+  file = "tx2gene.tsv",
+  sep = "\t",
+  quote = FALSE,
+  row.names = FALSE)
+```
+
+
+```{r}
+kallisto.path = file.path(wd, "results", "ORBIT", "kallisto")
+
+files <- file.path(list.dirs(kallisto.path)[-1], "abundance.h5")
+names(files) <- gsub(paste0(kallisto.path, "/"), "", list.dirs(kallisto.path)[-1])
+
+txi <- tximport(files, type = "kallisto",
+                tx2gene = tx2gene,
+                txOut = FALSE,
+                ignoreTxVersion = TRUE)
+
+raw_counts <- as.data.frame(txi$counts)
+```
+
+```{r}
+summary(raw_counts[,1])
+#hist(log2(raw_counts[,1] + 1))
+sum(raw_counts[,1] > 0) #number of expressed genes
+```
+
+```{r}
+top_idx <- order(raw_counts[[1]], decreasing = TRUE)
+
+head(data.frame(gene = rownames(raw_counts)[top_idx],
+                count = raw_counts[[1]][top_idx]),20)
+```
+
+```{r}
+ggplot(raw_counts) + 
+  geom_histogram(aes(x=raw_counts[[1]]), stat = "bin", bins = 200) + 
+  xlab("Raw counts") + 
+  ylab("Number of genes")
+```
+
+```{r}
+ggplot(raw_counts) +
+  geom_histogram(aes(x = log2(raw_counts[,1] + 1)),bins = 100) +
+  xlab("log2(count + 1)") +
+  ylab("Number of genes")
+```
+
+
+```{r}
+sample1 <- sample_sheet |>
+  dplyr::filter(sample_id == "ORv-01__LN_FNA_Day_28.FC22K7HFLT1_L1_ICACAATAGGA-TCCATCCGAG")
+
+dds <- DESeqDataSetFromTximport(txi,
+                                   colData = sample1,
+                                   design = ~ timepoint_days)
+```
+
+```{r}
+smallestGroupSize <- 3
+keep <- rowSums(counts(dds) >= 10) >= smallestGroupSize
+dds <- dds[keep,]
+
+dds$condition <- factor(dds$condition, levels = c("0","3", "7", "10", "28", "49"))
+dds <- DESeq(dds)
+res <- results(dds)
+resOrdered <- res[order(res$pvalue),]
+```

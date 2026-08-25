@@ -11,111 +11,70 @@ knitr::opts_chunk$set(echo = TRUE)
 if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 
-#BiocManager::install("Glimma")
-#BiocManager::install("DESeq2")
-#BiocManager::install("GenomicRanges")
-#BiocManager::install("rtracklayer")
-#install.packages("remotes", repos='http://cran.us.r-project.org')
-#remotes::install_github("AllenInstitute/GeneOrthology")
-
 library(tidyverse)
 library(tximport)
-library(DESeq2)
-library(Glimma)
-library(rtracklayer)
-library(GeneOrthology)
+#library(DEseq2)
+
+setwd("D:/canine-seq")
+wd <- getwd()
 ```
 
 ```{r}
-build_tx2gene <- function(gtf_file_path){
-  tx2gene <- rtracklayer::readGFF(gtf_file_path) |>
-    as.data.frame() |>
-    dplyr::select(transcript_id, gene_id, gene_name) |>
-    distinct() |>
-    dplyr::filter(!is.na(transcript_id))
-}
+sample_sheet <- read.csv(file.path(wd, "/data/ORBIT/sample_sheet.csv"))
 
-prepare_samples <- function(sample_sheet_path){
-  sample_sheet <- read.csv(sample_sheet_path) |>
-    mutate(time_fct = factor(timepoint_days),
-           time_num = as.numeric(timepoint_days),
-           subject = factor(subject))
-}
+gtf_file = paste0(wd, "/reference/dog/canfam4/", "Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.116.gtf.gz")
+gtf <- import(gtf_file)
 
-import_kallisto <- function(kallisto_path){
-  files <- file.path(list.dirs(kallisto_path)[-1], "abundance.h5")
-  names(files) <- gsub(paste0(kallisto_path, "/"), "", list.dirs(kallisto_path)[-1])
-  txi <- tximport(files, type = "kallisto",
+tx2gene <- mcols(gtf) |>
+  as.data.frame() |>
+  dplyr::select(transcript_id, gene_id, gene_name) |>
+  distinct() |>
+  dplyr::filter(!is.na(transcript_id))
+
+write.table( #move this to correct folder
+  tx2gene,
+  file = "tx2gene.tsv",
+  sep = "\t",
+  quote = FALSE,
+  row.names = FALSE)
+```
+
+
+```{r}
+kallisto.path = file.path(wd, "results", "ORBIT", "kallisto")
+
+files <- file.path(list.dirs(kallisto.path)[-1], "abundance.h5")
+names(files) <- gsub(paste0(kallisto.path, "/"), "", list.dirs(kallisto.path)[-1])
+
+txi <- tximport(files, type = "kallisto",
                 tx2gene = tx2gene,
                 txOut = FALSE,
                 ignoreTxVersion = TRUE)
-}
 
-
-run_model <- function(txi=txi,
-                      sample_sheet=sample_sheet,
-                      design,
-                      reduced,
-                      test = "Wald",
-                      col) {
-  dds <- DESeqDataSetFromTximport(txi,
-                                  colData = sample_sheet,
-                                  design = design)
-  if (test == "LRT") {
-    dds <- DESeq(dds, test = test, reduced = reduced)
-  }
-  else {
-    dds <- DESeq(dds, test = test)
-  }
-  return(dds)
-}
-  
-process_results <- function(dds=dds, tx2gene=tx2gene, alpha = 0.05){
-  res <- results(dds)
-  print(summary(res))
-  res <- res |>
-    as.data.frame() |>
-    rownames_to_column("gene_id") |>
-    left_join(tx2gene, by = "gene_id") |>
-    select(-transcript_id) |>
-    distinct(gene_id, .keep_all = TRUE) |>
-    filter(!is.na(padj)) |>
-    arrange(padj) |>
-    filter(padj < alpha)
-    return(res)
-}
+raw_counts <- as.data.frame(txi$counts)
 ```
 
 ```{r}
-wd = "D:/canine-seq"
-setwd(wd)
-
-sample_sheet_path = "D:/canine-seq/data/ORBIT/sample_sheet.csv"
-gtf_path = "D:/canine-seq/reference/dog/canfam4/Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.116.gtf.gz"
-kallisto_path = "D:/canine-seq/results/ORBIT/kallisto"
-
-sample_sheet <- prepare_samples(sample_sheet_path)
-tx2gene <- build_tx2gene(gtf_path)
-txi <- import_kallisto(kallisto_path)
-
-counts <- as.data.frame(txi$counts)
-```
-
-```{r}
-# examples for one sample
 summary(raw_counts[,1])
 #hist(log2(raw_counts[,1] + 1))
 sum(raw_counts[,1] > 0) #number of expressed genes
+```
 
+```{r}
 top_idx <- order(raw_counts[[1]], decreasing = TRUE)
 
 head(data.frame(gene = rownames(raw_counts)[top_idx],
                 count = raw_counts[[1]][top_idx]),20)
+```
+
+```{r}
 ggplot(raw_counts) + 
   geom_histogram(aes(x=raw_counts[[1]]), stat = "bin", bins = 200) + 
   xlab("Raw counts") + 
   ylab("Number of genes")
+```
 
+```{r}
 ggplot(raw_counts) +
   geom_histogram(aes(x = log2(raw_counts[,1] + 1)),bins = 100) +
   xlab("log2(count + 1)") +
@@ -124,41 +83,16 @@ ggplot(raw_counts) +
 
 
 ```{r}
-# SUBJECT ONLY MODEL
-# shows differences in expression between subjects regardless of time
-dds_subject <- run_model(txi,
-                        sample_sheet,
-                        design = ~ subject,
-                        test = "Wald",
-                        col = time_fct)
-glimmaMA(dds_subject, groups = colData(dds_subject)$time_fct)
-subject_df <- process_results(dds_subject, tx2gene, 0.05)
+sampleTable <- data.frame(
+  sampleName = names(files),
+  condition = c("treated", "treated", "control")
+)
+
+sample1 <- sample_sheet |>
+  dplyr::filter(sample_id == "ORv-01__LN_FNA_Day_28.FC22K7HFLT1_L1_ICACAATAGGA-TCCATCCGAG")
+
+library("DESeq2")
+ddsTxi <- DESeqDataSetFromTximport(txi,
+                                   colData = sample1,
+                                   design = ~ timepoint_days)
 ```
-
-```{r}
-# TIME + SUBJECT LRT W/ TIME AS NUMERIC # linear effects over time
-# shows the genes that are differentially expressed over time accounting for variation between subjects
-dds_st_num <- run_model(txi,
-                        sample_sheet,
-                        design = ~ subject + time_num,
-                        reduced = ~ subject,
-                        test = "LRT",
-                        col = time_num)
-glimmaMA(dds_st_num, groups = colData(dds_st_num)$time_num)
-res_st_num_df <- process_results(dds_st_fct, tx2gene, 0.05)
-```
-
-
-```{r}
-# TIME + SUBJECT LRT W/ TIME AS FACTOR # non linear effects over time
-# shows the genes that are differentially expressed over time accounting for variation between subjects
-dds_st_fct <- run_model(txi,
-                        sample_sheet,
-                        design = ~ subject + time_fct,
-                        reduced = ~ subject,
-                        test = "LRT",
-                        col = time_fct)
-glimmaMA(dds_st_fct, groups = colData(dds_st_fct)$time_fct)
-res_st_fct_df <- process_results(dds_st_fct, tx2gene, 0.05)
-```
-

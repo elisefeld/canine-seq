@@ -19,7 +19,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE))
 
 library(tidyverse)
 library(tximport)
-library(DEseq2)
+library(DESeq2)
 library(Glimma)
 library(rtracklayer)
 ```
@@ -29,32 +29,46 @@ library(rtracklayer)
 setwd("D:/canine-seq")
 wd <- getwd()
 
-
 # SET CONSTANTS
 alpha = 0.05
-
+min_logfold = 0.5
+time_levels = c(0, 3, 7, 10, 14, 28, 49)
 
 # SET FILE PATHS
 sample_sheet_path = "D:/canine-seq/data/ORBIT/sample_sheet.csv"
-gtf_path = "D:/canine-seq/reference/dog/canfam4/Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.116.gtf.gz"
+gtf_file_path = "D:/canine-seq/reference/dog/canfam4/Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.116.gtf.gz"
 kallisto_path = "D:/canine-seq/results/ORBIT/kallisto"
 ```
 
+
 ```{r}
-build_tx2gene <- function(gtf_file_path){
+tx2gene <- build_tx2gene(gtf_file_path)
+sample_sheet <- prepare_samples(sample_sheet_path, time_levels)
+txi <- import_kallisto(kallisto_path)
+
+counts <- txi$abundance
+```
+
+```{r}
+build_tx2gene <- function(gtf_file_path=gtf_file_path){
   tx2gene <- rtracklayer::readGFF(gtf_file_path) |>
     as.data.frame() |>
     dplyr::select(transcript_id, gene_id, gene_name) |>
     distinct() |>
-    dplyr::filter(!is.na(transcript_id))}
+    dplyr::filter(!is.na(transcript_id)) |>
+    mutate(gene_name = coalesce(gene_name, gene_id))
+    return(tx2gene)}
 
-prepare_samples <- function(sample_sheet_path){
+prepare_samples <- function(sample_sheet_path=sample_sheet_path, time_levels=time_levels){
   sample_sheet <- read.csv(sample_sheet_path) |>
-    mutate(time_fct = factor(timepoint_days),
+    mutate(time = factor(timepoint_days, levels = time_levels),
            time_num = as.numeric(timepoint_days),
-           subject = factor(subject))}
+           subject = factor(subject),
+           sample_name = paste0("Subject ", subject, ", ", "Day ", time)) |>
+    select(-timepoint_days)
+  return(sample_sheet)}
 
-import_kallisto <- function(kallisto_path){
+import_kallisto <- function(kallisto_path=kallisto_path){
   files <- file.path(list.dirs(kallisto_path)[-1], "abundance.h5")
   names(files) <- gsub(paste0(kallisto_path, "/"), "", list.dirs(kallisto_path)[-1])
   txi <- tximport(files, type = "kallisto",
@@ -93,26 +107,6 @@ process_results <- function(dds=dds, tx2gene=tx2gene, alpha = 0.05){
     arrange(padj) |>
     filter(padj < alpha)
     return(res)}
-```
-
-
-```{r}
-kallisto.path = file.path(wd, "results", "ORBIT", "kallisto")
-
-files <- file.path(list.dirs(kallisto.path)[-1], "abundance.h5")
-names(files) <- gsub(paste0(kallisto.path, "/"), "", list.dirs(kallisto.path)[-1])
-
-
-txi <- tximport(files, type = "kallisto",
-                tx2gene = tx2gene,
-                txOut = FALSE,
-                ignoreTxVersion = TRUE)
-sample_sheet <- prepare_samples(sample_sheet_path)
-tx2gene <- build_tx2gene(gtf_path)
-txi <- import_kallisto(kallisto_path)
-
-raw_counts <- as.data.frame(txi$counts)
-counts <- as.data.frame(txi$counts)
 ```
 
 ```{r}

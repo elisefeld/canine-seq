@@ -30,23 +30,16 @@ setwd("D:/canine-seq")
 wd <- getwd()
 
 # SET CONSTANTS
-alpha = 0.05
+min_alpha = 0.05
 min_logfold = 0.5
 time_levels = c(0, 3, 7, 10, 14, 28, 49)
+min_count = 10
+min_samples = 2
 
 # SET FILE PATHS
 sample_sheet_path = "D:/canine-seq/data/ORBIT/sample_sheet.csv"
 gtf_file_path = "D:/canine-seq/reference/dog/canfam4/Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.116.gtf.gz"
 kallisto_path = "D:/canine-seq/results/ORBIT/kallisto"
-```
-
-
-```{r}
-tx2gene <- build_tx2gene(gtf_file_path)
-sample_sheet <- prepare_samples(sample_sheet_path, time_levels)
-txi <- import_kallisto(kallisto_path)
-
-counts <- txi$abundance
 ```
 
 ```{r}
@@ -82,10 +75,16 @@ run_model <- function(txi=txi,
                       design,
                       reduced,
                       test = "Wald",
-                      col) {
+                      col,
+                      min_count = min_count,
+                      min_samples = min_samples) {
   dds <- DESeqDataSetFromTximport(txi,
                                   colData = sample_sheet,
                                   design = design)
+  
+  keep <- rowSums(counts(dds) >= min_count) >= min_samples
+  dds <- dds[keep,]
+
   if (test == "LRT") {
     dds <- DESeq(dds, test = test, reduced = reduced)
   }
@@ -107,6 +106,56 @@ process_results <- function(dds=dds, tx2gene=tx2gene, alpha = 0.05){
     arrange(padj) |>
     filter(padj < alpha)
     return(res)}
+
+process_counts <- function(counts) {
+  counts <- counts |>
+  t()}
+```
+
+
+```{r}
+# IMPORT NECESSARY DATA
+tx2gene <- build_tx2gene(gtf_file_path)
+sample_sheet <- prepare_samples(sample_sheet_path, time_levels)
+txi <- import_kallisto(kallisto_path)
+
+counts <- txi$counts
+
+
+geom_point()
+```
+
+```{r}
+#QUALITY CONTROL
+# a plot with the sum of counts for each sample
+
+
+
+```
+
+
+```{r}
+# MODEL FITTING
+
+# TIME + SUBJECT LRT W/ TIME AS FACTOR # non linear effects over time
+# shows the genes that are differentially expressed over time accounting for variation between subjects
+dds <- run_model(txi,
+                  sample_sheet,
+                  design = ~ subject + time,
+                  reduced = ~ subject,
+                  test = "LRT",
+                  col = time,
+                  min_count = min_count,
+                  min_samples = min_samples)
+
+
+plotPCA(rlog(dds), intgroup = c("subject"))
+
+
+glimmaMA(dds, groups = colData(dds)$time)
+res <- process_results(dds, tx2gene, min_alpha)
+```
+
 ```
 
 ```{r}
@@ -114,78 +163,19 @@ process_results <- function(dds=dds, tx2gene=tx2gene, alpha = 0.05){
 summary(raw_counts[,1])
 #hist(log2(raw_counts[,1] + 1))
 sum(raw_counts[,1] > 0) #number of expressed genes
-```
-
-```{r}
 top_idx <- order(raw_counts[[1]], decreasing = TRUE)
 
 head(data.frame(gene = rownames(raw_counts)[top_idx],
                 count = raw_counts[[1]][top_idx]),20)
-```
 
-```{r}
 ggplot(raw_counts) + 
   geom_histogram(aes(x=raw_counts[[1]]), stat = "bin", bins = 200) + 
   xlab("Raw counts") + 
   ylab("Number of genes")
-```
 
-```{r}
 ggplot(raw_counts) +
   geom_histogram(aes(x = log2(raw_counts[,1] + 1)),bins = 100) +
-  xlab("log2(count + 1)") +
-@@ -83,21 +124,41 @@ ggplot(raw_counts) +
-
-
-```{r}
-sample1 <- sample_sheet |>
-  dplyr::filter(sample_id == "ORv-01__LN_FNA_Day_28.FC22K7HFLT1_L1_ICACAATAGGA-TCCATCCGAG")
-# SUBJECT ONLY MODEL
-# shows differences in expression between subjects regardless of time
-dds_subject <- run_model(txi,
-                        sample_sheet,
-                        design = ~ subject,
-                        test = "Wald",
-                        col = time_fct)
-glimmaMA(dds_subject, groups = colData(dds_subject)$time_fct)
-subject_df <- process_results(dds_subject, tx2gene, 0.05)
-```
-
-dds <- DESeqDataSetFromTximport(txi,
-                                   colData = sample1,
-                                   design = ~ timepoint_days)
-```{r}
-# TIME + SUBJECT LRT W/ TIME AS NUMERIC # linear effects over time
-# shows the genes that are differentially expressed over time accounting for variation between subjects
-dds_st_num <- run_model(txi,
-                        sample_sheet,
-                        design = ~ subject + time_num,
-                        reduced = ~ subject,
-                        test = "LRT",
-                        col = time_num)
-glimmaMA(dds_st_num, groups = colData(dds_st_num)$time_num)
-res_st_num_df <- process_results(dds_st_fct, tx2gene, 0.05)
+  xlab("log2(count + 1)") 
 ```
 
 
-```{r}
-smallestGroupSize <- 3
-keep <- rowSums(counts(dds) >= 10) >= smallestGroupSize
-dds <- dds[keep,]
-
-dds$condition <- factor(dds$condition, levels = c("0","3", "7", "10", "28", "49"))
-dds <- DESeq(dds)
-res <- results(dds)
-resOrdered <- res[order(res$pvalue),]
-```
-# TIME + SUBJECT LRT W/ TIME AS FACTOR # non linear effects over time
-# shows the genes that are differentially expressed over time accounting for variation between subjects
-dds_st_fct <- run_model(txi,
-                        sample_sheet,
-                        design = ~ subject + time_fct,
-                        reduced = ~ subject,
-                        test = "LRT",
-                        col = time_fct)
-glimmaMA(dds_st_fct, groups = colData(dds_st_fct)$time_fct)
-res_st_fct_df <- process_results(dds_st_fct, tx2gene, 0.05)
-```

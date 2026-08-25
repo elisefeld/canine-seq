@@ -164,7 +164,15 @@ res <- results(dds)
 print(summary(res))
 res_df <- process_results(res, tx2gene, min_alpha, min_logfold)
 
-sig_genes <- res_df$gene_name
+upregulated <- res_df |>
+  filter(log2FoldChange > 0)
+
+up_genes <- upregulated$gene_name
+
+downregulated <- res_df |>
+  filter(log2FoldChange < 0)
+
+down_genes <- downregulated$gene_name
 ```
 
 
@@ -172,10 +180,28 @@ sig_genes <- res_df$gene_name
 counts_norm <- process_counts(counts(dds), sample_sheet)
 
 counts_norm |>
-filter(gene_name %in% sig_genes) |>
+filter(gene_name %in% up_genes) |>
 ggplot(aes(x = time, y = count, color = subject)) +
   geom_point() +
-  facet_wrap(~gene_name)
+  geom_smooth(method = "lm") +
+  theme_bw() +
+  facet_wrap(~gene_name, scales = "free") +
+  labs(x = "Time (days)",
+       y = "Normalized count",
+       title = "Upregulated Genes")
+
+
+counts_norm |>
+filter(gene_name %in% down_genes) |>
+ggplot(aes(x = time, y = count, color = subject)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_bw() +
+  facet_wrap(~gene_name, scales = "free") +
+    labs(x = "Time (days)",
+       y = "Normalized count",
+       title = "Downregulated Genes")
+
 ```
 
 

@@ -100,7 +100,9 @@ process_counts <- function(counts, sample_sheet) {
     pivot_longer(cols = starts_with("OR"),
                  names_to = "sample_id",
                  values_to = "count") |>
-    left_join(sample_sheet, by = "sample_id")
+    left_join(sample_sheet, by = "sample_id") |>
+    left_join(tx2gene, by = "gene_id") |>
+    select(-transcript_id)
   }
   
 process_results <- function(res, tx2gene, alpha = 0.05, min_logfold = 1){
@@ -161,11 +163,19 @@ glimmaMA(dds, groups = colData(dds)$time)
 res <- results(dds)
 print(summary(res))
 res_df <- process_results(res, tx2gene, min_alpha, min_logfold)
+
+sig_genes <- res_df$gene_name
 ```
 
 
 ```{r}
 counts_norm <- process_counts(counts(dds), sample_sheet)
+
+counts_norm |>
+filter(gene_name %in% sig_genes) |>
+ggplot(aes(x = time, y = count, color = subject)) +
+  geom_point() +
+  facet_wrap(~gene_name)
 ```
 
 

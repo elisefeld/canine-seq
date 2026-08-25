@@ -43,7 +43,7 @@ kallisto_path = "D:/canine-seq/results/ORBIT/kallisto"
 ```
 
 ```{r}
-build_tx2gene <- function(gtf_file_path=gtf_file_path){
+build_tx2gene <- function(gtf_file_path){
   tx2gene <- rtracklayer::readGFF(gtf_file_path) |>
     as.data.frame() |>
     dplyr::select(transcript_id, gene_id, gene_name) |>
@@ -52,7 +52,7 @@ build_tx2gene <- function(gtf_file_path=gtf_file_path){
     mutate(gene_name = coalesce(gene_name, gene_id))
     return(tx2gene)}
 
-prepare_samples <- function(sample_sheet_path=sample_sheet_path, time_levels=time_levels){
+prepare_samples <- function(sample_sheet_path, time_levels){
   sample_sheet <- read.csv(sample_sheet_path) |>
     mutate(time = factor(timepoint_days, levels = time_levels),
            time_num = as.numeric(timepoint_days),
@@ -61,7 +61,7 @@ prepare_samples <- function(sample_sheet_path=sample_sheet_path, time_levels=tim
     select(-timepoint_days)
   return(sample_sheet)}
 
-import_kallisto <- function(kallisto_path=kallisto_path, tx2gene=tx2gene){
+import_kallisto <- function(kallisto_path, tx2gene){
   files <- file.path(list.dirs(kallisto_path)[-1], "abundance.h5")
   names(files) <- gsub(paste0(kallisto_path, "/"), "", list.dirs(kallisto_path)[-1])
   txi <- tximport(files, type = "kallisto",
@@ -71,13 +71,13 @@ import_kallisto <- function(kallisto_path=kallisto_path, tx2gene=tx2gene){
 
 
 run_model <- function(txi=txi,
-                      sample_sheet=sample_sheet,
+                      sample_sheet,
                       design,
                       reduced,
                       test = "Wald",
                       col,
-                      min_count = min_count,
-                      min_samples = min_samples) {
+                      min_count = 10,
+                      min_samples = 3) {
   dds <- DESeqDataSetFromTximport(txi,
                                   colData = sample_sheet,
                                   design = design)
@@ -92,22 +92,8 @@ run_model <- function(txi=txi,
     dds <- DESeq(dds, test = test)
   }
   return(dds)}
-  
-process_results <- function(dds=dds, tx2gene=tx2gene, alpha = 0.05){
-  res <- results(dds)
-  print(summary(res))
-  res <- res |>
-    as.data.frame() |>
-    rownames_to_column("gene_id") |>
-    left_join(tx2gene, by = "gene_id") |>
-    select(-transcript_id) |>
-    distinct(gene_id, .keep_all = TRUE) |>
-    filter(!is.na(padj)) |>
-    arrange(padj) |>
-    filter(padj < alpha)
-    return(res)}
 
-process_raw_counts <- function(counts, sample_sheet=sample_sheet) {
+process_counts <- function(counts, sample_sheet) {
   counts <- counts |>
   as.data.frame() |>
   rownames_to_column("gene_id") |>
@@ -116,6 +102,19 @@ process_raw_counts <- function(counts, sample_sheet=sample_sheet) {
                  values_to = "count") |>
     left_join(sample_sheet, by = "sample_id")
   }
+  
+process_results <- function(res, tx2gene, alpha = 0.05, min_logfold = 1){
+  res <- res |>
+    as.data.frame() |>
+    rownames_to_column("gene_id") |>
+    left_join(tx2gene, by = "gene_id") |>
+    select(-transcript_id) |>
+    distinct(gene_id, .keep_all = TRUE) |>
+    filter(!is.na(padj)) |>
+    arrange(padj) |>
+    filter(padj < min_alpha) |>
+    filter(abs(log2FoldChange) > min_logfold)
+    return(res)}
 ```
 
 
@@ -124,8 +123,7 @@ process_raw_counts <- function(counts, sample_sheet=sample_sheet) {
 tx2gene <- build_tx2gene(gtf_file_path)
 sample_sheet <- prepare_samples(sample_sheet_path, time_levels)
 txi <- import_kallisto(kallisto_path, tx2gene)
-
-counts <- process_raw_counts(txi$counts, sample_sheet)
+counts <- process_counts(txi$counts, sample_sheet)
 ```
 
 ```{r}
@@ -159,26 +157,15 @@ plotPCA(rlog(dds), intgroup = c("subject")) # subject accounts for the majority 
 plotDispEsts(dds) # Black points should cluster around the fitted line.
 
 glimmaMA(dds, groups = colData(dds)$time)
-res <- process_results(dds, tx2gene, min_alpha)
+
+res <- results(dds)
+print(summary(res))
+res_df <- process_results(res, tx2gene, min_alpha, min_logfold)
 ```
 
-```
 
 ```{r}
-# examples for one sample
-summary(raw_counts[,1])
-#hist(log2(raw_counts[,1] + 1))
-sum(raw_counts[,1] > 0) #number of expressed genes
-top_idx <- order(raw_counts[[1]], decreasing = TRUE)
-
-head(data.frame(gene = rownames(raw_counts)[top_idx],
-                count = raw_counts[[1]][top_idx]),20)
-
-
-
-ggplot(raw_counts) +
-  geom_histogram(aes(x = log2(raw_counts[,1] + 1)),bins = 100) +
-  xlab("log2(count + 1)") 
+counts_norm <- process_counts(counts(dds), sample_sheet)
 ```
 
 

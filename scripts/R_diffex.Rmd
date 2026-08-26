@@ -14,6 +14,11 @@ if (!requireNamespace("BiocManager", quietly = TRUE))
 #BiocManager::install("DESeq2")
 #BiocManager::install("GenomicRanges")
 #BiocManager::install("rtracklayer")
+#BiocManager::install("clusterProfiler")
+#BiocManager::install("org.Cf.eg.db")
+#BiocManager::install("GO.db")
+#BiocManager::install("apeglm")
+BiocManager::install("pheatmap")
 #install.packages("remotes", repos='http://cran.us.r-project.org')
 #remotes::install_github("AllenInstitute/GeneOrthology")
 
@@ -22,6 +27,12 @@ library(tximport)
 library(DESeq2)
 library(Glimma)
 library(rtracklayer)
+library(apeglm)
+library(pheatmap)
+library(clusterProfiler)
+library(org.Cf.eg.db)
+library(GO.db)
+library(stringr)
 ```
 
 ```{r}
@@ -32,7 +43,7 @@ wd <- getwd()
 # SET CONSTANTS
 min_alpha = 0.05
 min_logfold = 1
-time_levels = c(0, 3, 7, 10, 14, 28, 49)
+time_levels = c(0, 3, 7, 10, 28, 49)
 min_count = 10
 min_samples = 2
 
@@ -54,20 +65,22 @@ build_tx2gene <- function(gtf_file_path){
 
 prepare_samples <- function(sample_sheet_path, time_levels){
   sample_sheet <- read.csv(sample_sheet_path) |>
-    mutate(time = factor(timepoint_days, levels = time_levels),
-           time_num = as.numeric(timepoint_days),
+    mutate(time = factor(time, levels = time_levels),
+           time_num = as.numeric(time),
            subject = factor(subject),
-           sample_name = paste0("Subject ", subject, ", ", "Day ", time)) |>
-    select(-timepoint_days)
+           sample_name = paste0("Subject ", subject, ", ", "Day ", time))
+  rownames(sample_sheet) <- sample_sheet$sample_id
+
   return(sample_sheet)}
 
-import_kallisto <- function(kallisto_path, tx2gene){
+import_kallisto <- function(kallisto_path, tx2gene, sample_sheet){
   files <- file.path(list.dirs(kallisto_path)[-1], "abundance.h5")
-  names(files) <- gsub(paste0(kallisto_path, "/"), "", list.dirs(kallisto_path)[-1])
+  names(files) <- sample_sheet$sample_id
   txi <- tximport(files, type = "kallisto",
                 tx2gene = tx2gene,
                 txOut = FALSE,
-                ignoreTxVersion = TRUE)}
+                ignoreTxVersion = TRUE)
+  return(txi)}
 
 
 run_model <- function(txi=txi,
@@ -102,20 +115,20 @@ process_counts <- function(counts, sample_sheet) {
                  values_to = "count") |>
     left_join(sample_sheet, by = "sample_id") |>
     left_join(tx2gene, by = "gene_id") |>
-    select(-transcript_id)
+    dplyr::select(-transcript_id)
   }
   
-process_results <- function(res, tx2gene, alpha = 0.05, min_logfold = 1){
+process_results <- function(res, tx2gene, min_alpha = 0.05, min_logfold = 1){
   res <- res |>
     as.data.frame() |>
     rownames_to_column("gene_id") |>
     left_join(tx2gene, by = "gene_id") |>
-    select(-transcript_id) |>
+    dplyr::select(-transcript_id) |>
     distinct(gene_id, .keep_all = TRUE) |>
     filter(!is.na(padj)) |>
     arrange(padj) |>
-    filter(padj < min_alpha) |>
-    filter(abs(log2FoldChange) > min_logfold)
+    filter(padj <= min_alpha) |>
+    filter(abs(log2FoldChange) >= min_logfold)
     return(res)}
 ```
 
@@ -124,8 +137,10 @@ process_results <- function(res, tx2gene, alpha = 0.05, min_logfold = 1){
 # IMPORT NECESSARY DATA
 tx2gene <- build_tx2gene(gtf_file_path)
 sample_sheet <- prepare_samples(sample_sheet_path, time_levels)
-txi <- import_kallisto(kallisto_path, tx2gene)
+txi <- import_kallisto(kallisto_path, tx2gene, sample_sheet)
 counts <- process_counts(txi$counts, sample_sheet)
+
+all(rownames(sample_sheet)==colnames(txi))
 ```
 
 ```{r}
@@ -136,7 +151,8 @@ counts |>
   geom_histogram(aes(x=log2(count+1)), position = "identity", bins = 200) +
   labs(x = "log2(count +1)",
        y = "Number of Genes") +
-  facet_wrap(~sample_name)
+  facet_grid(rows = vars(subject),
+             cols = vars(time))
 ```
 
 
@@ -154,15 +170,67 @@ dds <- run_model(txi,
                   min_count = min_count,
                   min_samples = min_samples)
 
+counts_norm <- process_counts(counts(dds, normalized = TRUE), sample_sheet)
+```
 
-plotPCA(rlog(dds), intgroup = c("subject")) # subject accounts for the majority of variation between samples
+```{r}
+glimmaMDS(dds) #color by subject, shape by time.
+# 46% of variance explained by subject
+
+#normalizationFactors(dds)
 plotDispEsts(dds) # Black points should cluster around the fitted line.
 
+
+# visualizing shrinkage of log fold change
+res <- results(dds)
+plotMA(res, alpha = 0.1, ylim = c(-2, 2), cex=1.5, main = "MA-plot before LFC shrinkage")
+
+resLFC <- lfcShrink(dds, coef = "time_49_vs_0", type="apeglm")
+plotMA(resLFC, alpha = 0.1, ylim = c(-2, 2), cex=1.5, main = "MA-plot after LFC shrinkage")
+```
+
+```{r}
+# getting a data frame that has log fold change, p val and gene name for every coefficient
+coefficients <- resultsNames(dds)
+
+df_list <- list()
+for (coef in coefficients[-1]){
+  res_shrunk <- lfcShrink(dds, coef = coef, type = "apeglm")
+  res_df <- process_results(res_shrunk, tx2gene, min_alpha = 10000, min_logfold = 0)
+  res_df <- res_df |>
+    mutate(coefficient = coef)
+  df_list <- append(df_list, list(res_df))
+}
+
+df <- do.call(rbind, df_list)
+```
+
+```{r}
+df_filter <- df |>
+  mutate(regulation = case_when(
+    (padj < min_alpha & abs(log2FoldChange) > min_logfold & log2FoldChange > 0) ~ "upregulated",
+     (padj < min_alpha & abs(log2FoldChange) > min_logfold & log2FoldChange < 0) ~ "downregulated",
+    T ~ "nonDE")) |>
+  filter(regulation != "nonDE" & coefficient != "subject_2_vs_1") |>
+  mutate(time = str_extract(coefficient, "(?<=time_)\\d+"))
+```
+
+
+```{r}
+plot_df <- df_filter |>
+  left_join(counts_norm, by = c("gene_id", "gene_name"))
+  
+```
+
+
+```{r}
 glimmaMA(dds, groups = colData(dds)$time)
+glimmaVolcano(dds, groups = colData(dds)$time)
 
 res <- results(dds)
 print(summary(res))
-res_df <- process_results(res, tx2gene, min_alpha, min_logfold)
+#res_no_filter <- process_results(res, tx2gene, min_alpha = 10000, min_logfold = 0)
+#res_df <- process_results(res, tx2gene, min_alpha, min_logfold)
 
 upregulated <- res_df |>
   filter(log2FoldChange > 0)
@@ -173,12 +241,12 @@ downregulated <- res_df |>
   filter(log2FoldChange < 0)
 
 down_genes <- downregulated$gene_name
+
+plotCounts(dds, gene = "ENSCAFG00805019251", intgroup = c("time"), main = "ENSCAFG00805019251")
 ```
 
 
 ```{r}
-counts_norm <- process_counts(counts(dds, normalized = TRUE), sample_sheet)
-
 counts_norm |>
 filter(gene_name %in% up_genes) |>
 ggplot(aes(x = time, y = count, color = subject)) +
@@ -204,3 +272,23 @@ ggplot(aes(x = time, y = count, color = subject)) +
 ```
 
 
+```{r}
+entrez_ids <- mapIds(org.Cf.eg.db,
+                     keys = res_no_filter$gene_id,
+                     keytype = "ENSEMBL",
+                     column = "ENTREZID")
+
+
+ensembl_to_entrez <- AnnotationDbi::select(
+  org.Cf.eg.db,
+  keys = res_no_filter$gene_id,
+  columns = c("ENSEMBL", "ENTREZID"), 
+  keytype = "ENSEMBL"
+)
+
+res_no_filter |>
+  dplyr::inner_join(ensembl_to_entrez, by = dplyr::join_by(gene_id == ENSEMBL)) |>
+  dplyr::select(ensembl_gene_id, ENTREZID, dplyr::everything()) -> de_res
+
+head(de_res)
+```

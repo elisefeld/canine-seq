@@ -24,7 +24,7 @@ for dir in dirs:
 
 # File declaration and checks
 SAMPLE_SHEET = os.path.join(DATA_DIR, config['run']['sample_sheet'])
-if os.path.exists(SAMPLE_SHEET)
+if os.path.exists(SAMPLE_SHEET):
     print(f'File \'{SAMPLE_SHEET}\' located successfully')
 else:
     raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file)

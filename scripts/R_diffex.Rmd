@@ -26,8 +26,10 @@ library(DESeq2)
 library(Glimma)
 library(rtracklayer)
 library(apeglm)
+library(msigdbr)
 #library(pheatmap)
 library(clusterProfiler)
+library(org.Hs.eg.db)
 ```
 
 ```{r}
@@ -261,4 +263,104 @@ ggplot(aes(x = time_num, y = count, color = subject)) +
     labs(x = 'Time (days)',
        y = 'Normalized count',
        title = 'Downregulated Genes')
+```
+
+
+```{r}
+msigdbr_collections()
+
+hallmark<- msigdbr(collection = "H") |> 
+  dplyr::select(gs_name, ensembl_gene)
+head(hallmark)
+
+h2 <- msigdbr(collection = "H") |>
+  dplyr::select(gs_name, gs_description)
+
+
+C4 <- msigdbr(collection = "C4") |> 
+  dplyr::select(gs_name, ensembl_gene)
+head(C4)
+C42 <- msigdbr(collection = "C4") |>
+  dplyr::select(gs_name, gs_description)
+
+
+C7 <- msigdbr(collection = "C7", subcollection = "IMMUNESIGDB") |> 
+  dplyr::select(gs_name, ensembl_gene)
+head(C7)
+C72 <- msigdbr(collection = "C7", subcollection = "IMMUNESIGDB") |>
+  dplyr::select(gs_name, gs_description)
+```
+
+```{r}
+time_3 <- df |>
+  filter(coefficient == "time_3_vs_0" & !is.na(human_gene_name)) |>
+  arrange(padj, log2FoldChange) |>
+  pull(log2FoldChange, name = human_gene_id)
+
+eh3 <- GSEA(time_3, TERM2GENE = hallmark, TERM2NAME = h2, seed=TRUE)
+
+time_7 <- df |>
+  filter(coefficient == "time_7_vs_0" & !is.na(human_gene_name)) |>
+  arrange(padj, log2FoldChange) |>
+  pull(log2FoldChange, name = human_gene_id)
+
+eh7 <- GSEA(time_7, TERM2GENE = hallmark, TERM2NAME = h2, seed=TRUE)
+
+time_10 <- df |>
+  filter(coefficient == "time_10_vs_0" & !is.na(human_gene_name)) |>
+  arrange(padj, log2FoldChange) |>
+  pull(log2FoldChange, name = human_gene_id)
+
+eh10 <- GSEA(time_10, TERM2GENE = hallmark, TERM2NAME = h2, seed=TRUE)
+
+time_28 <- df |>
+  filter(coefficient == "time_28_vs_0" & !is.na(human_gene_name)) |>
+  arrange(padj, log2FoldChange) |>
+  pull(log2FoldChange, name = human_gene_id)
+
+eh28 <- GSEA(time_28, TERM2GENE = hallmark, TERM2NAME = h2, seed=TRUE)
+
+time_49 <- df |>
+  filter(coefficient == "time_49_vs_0" & !is.na(human_gene_name)) |>
+  arrange(padj, log2FoldChange) |>
+  pull(log2FoldChange, name = human_gene_id)
+
+eh49 <- GSEA(time_49, TERM2GENE = hallmark, TERM2NAME = h2, seed=TRUE)
+
+```
+
+
+```{r}
+all <- df |>
+  filter(!is.na(human_gene_name)) |>
+  arrange(padj, log2FoldChange) |>
+  pull(log2FoldChange, name = human_gene_id)
+
+ehall <- GSEA(all, TERM2GENE = hallmark, TERM2NAME = h2, seed=TRUE)
+
+#all_C4 <- GSEA(all, TERM2GENE = C4, TERM2NAME = C42, seed=TRUE)
+#all_C7 <- GSEA(all, TERM2GENE = C7, TERM2NAME = C72, seed=TRUE)
+
+
+enrichplot::gseaplot2(ehall, geneSetID = c(1,2,3))
+```
+
+```{r}
+#GSEA_GO <- gseGO(geneList = all,
+#                   ont = "BP",
+#                   OrgDb = org.Hs.eg.db,
+#                   keyType = "ENSEMBL",
+#                   seed = TRUE) 
+
+df_3 <- as.data.frame(eh3)
+df_7 <- as.data.frame(eh7)
+df_10 <- as.data.frame(eh10)
+df_28 <- as.data.frame(eh28)
+df_49 <- as.data.frame(eh49)
+
+
+result_df <- as.data.frame(ehall)
+
+
+write.csv(result_df, "result.csv")
 ```

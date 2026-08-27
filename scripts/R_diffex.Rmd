@@ -18,92 +18,82 @@ if (!requireNamespace("BiocManager", quietly = TRUE))
 #BiocManager::install("org.Cf.eg.db")
 #BiocManager::install("GO.db")
 #BiocManager::install("apeglm")
-BiocManager::install("pheatmap")
+#BiocManager::install("fgsea")
+#BiocManager::install("pheatmap")
+#BiocManager::install("fgsea")
+BiocManager::install("orthogene")
+#install.packages("msigdbr")
 #install.packages("remotes", repos='http://cran.us.r-project.org')
 #remotes::install_github("AllenInstitute/GeneOrthology")
 
 library(tidyverse)
+library(stringr)
 library(tximport)
 library(DESeq2)
 library(Glimma)
 library(rtracklayer)
 library(apeglm)
-library(pheatmap)
+#library(pheatmap)
 library(clusterProfiler)
 library(org.Cf.eg.db)
-library(GO.db)
-library(stringr)
+#library(GO.db)
+#library(msigdbr)
+library(orthogene)
 ```
 
 ```{r}
-# SET WORKING DIRECTORY
-setwd("D:/canine-seq")
-wd <- getwd()
-
-# SET CONSTANTS
-min_alpha = 0.05
-min_logfold = 1
-time_levels = c(0, 3, 7, 10, 28, 49)
-min_count = 10
-min_samples = 2
-
-# SET FILE PATHS
-sample_sheet_path = "D:/canine-seq/data/ORBIT/sample_sheet.csv"
-gtf_file_path = "D:/canine-seq/reference/dog/canfam4/Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.116.gtf.gz"
-kallisto_path = "D:/canine-seq/results/ORBIT/kallisto"
-```
-
-```{r}
-build_tx2gene <- function(gtf_file_path){
-  tx2gene <- rtracklayer::readGFF(gtf_file_path) |>
+prep_tx2gene <- function(gtf_path){
+  print(paste0("Reading .gtf file from ", gtf_path, "..."))
+  tx2gene <- rtracklayer::readGFF(gtf_path) |>
     as.data.frame() |>
-    dplyr::select(transcript_id, gene_id, gene_name) |>
-    distinct() |>
+    dplyr::select(transcript_id, gene_id, gene_name, gene_biotype) |>
     dplyr::filter(!is.na(transcript_id)) |>
+    distinct() |>
     mutate(gene_name = coalesce(gene_name, gene_id))
+    print(paste0("Found ", length(unique(tx2gene$transcript_id)), " unique transcripts."))
     return(tx2gene)}
 
-prepare_samples <- function(sample_sheet_path, time_levels){
+prep_samples <- function(sample_sheet_path, time_levels){
+  print(paste0("Reading .csv file from ", sample_sheet_path, "..."))
+  print(paste0("Specified time level for experiment: ", time_levels))
   sample_sheet <- read.csv(sample_sheet_path) |>
     mutate(time = factor(time, levels = time_levels),
            time_num = as.numeric(time),
            subject = factor(subject),
            sample_name = paste0("Subject ", subject, ", ", "Day ", time))
   rownames(sample_sheet) <- sample_sheet$sample_id
-
+  print(paste0("Found ", length(sample_sheet$sample_id), " samples."))
   return(sample_sheet)}
 
-import_kallisto <- function(kallisto_path, tx2gene, sample_sheet){
-  files <- file.path(list.dirs(kallisto_path)[-1], "abundance.h5")
+prep_kallisto <- function(kallisto_path, tx2gene, sample_sheet){
+  files <- file.path(kallisto_path, sample_sheet$sample_id, "abundance.h5")
+  #print(paste0(length(files), " .h5 files found in ", kallisto_path)) add verification that the files exist
   names(files) <- sample_sheet$sample_id
+  
   txi <- tximport(files, type = "kallisto",
-                tx2gene = tx2gene,
-                txOut = FALSE,
-                ignoreTxVersion = TRUE)
+                  tx2gene = tx2gene,
+                  txOut = FALSE,
+                  ignoreTxVersion = TRUE)
   return(txi)}
 
+prep_homologs <- function(homolog_path){
+  print(paste0("Reading csv from ", homolog_path, "..."))
+  homologs <- read.csv(homolog_path, sep = "\t") |>
+    filter(ref_species == "homo_sapiens") |>
+    dplyr::select(ref_gene_stable_id, ref_gene_name, query_gene_stable_id, query_gene_name) |>
+    rename(human_gene_id = ref_gene_stable_id,
+           human_gene_name = ref_gene_name,
+           dog_gene_id = query_gene_stable_id,
+           dog_gene_name = query_gene_name)
+  return(homologs)}
 
-run_model <- function(txi=txi,
-                      sample_sheet,
-                      design,
-                      reduced,
-                      test = "Wald",
-                      col,
-                      min_count = 10,
-                      min_samples = 3) {
-  dds <- DESeqDataSetFromTximport(txi,
-                                  colData = sample_sheet,
-                                  design = design)
-  
-  keep <- rowSums(counts(dds) >= min_count) >= min_samples
+run_model <- function(txi=txi, sample_sheet, design, reduced, test = "Wald", col, min_count = 10, min_samples = 3) {
+  dds <- DESeqDataSetFromTximport(txi, colData = sample_sheet, design = design)
+  keep <- rowSums(counts(dds) >= min_count) >= min_samples # filtering for low counts
   dds <- dds[keep,]
 
-  if (test == "LRT") {
-    dds <- DESeq(dds, test = test, reduced = reduced)
-  }
-  else {
-    dds <- DESeq(dds, test = test)
-  }
+  if (test == "LRT") {dds <- DESeq(dds, test = test, reduced = reduced)}
+  else {dds <- DESeq(dds, test = test)}
   return(dds)}
 
 process_counts <- function(counts, sample_sheet) {
@@ -125,27 +115,58 @@ process_results <- function(res, tx2gene, min_alpha = 0.05, min_logfold = 1){
     left_join(tx2gene, by = "gene_id") |>
     dplyr::select(-transcript_id) |>
     distinct(gene_id, .keep_all = TRUE) |>
-    filter(!is.na(padj)) |>
+    filter(!is.na(padj)) |> # genes with extreme outliers are set to NA
     arrange(padj) |>
     filter(padj <= min_alpha) |>
     filter(abs(log2FoldChange) >= min_logfold)
     return(res)}
+
+extract_coefs <- function(dds, tx2gene, homologs, min_alpha, min_logfold) {
+  # getting a data frame that has log fold change, p val and gene name for every coefficient
+  coefficients <- resultsNames(dds)
+  
+  df_list <- list()
+  for (coef in coefficients[-1]){
+    res_shrunk <- lfcShrink(dds, coef = coef, type = "apeglm")
+    res_df <- process_results(res_shrunk, tx2gene, min_alpha, min_logfold) |>
+      mutate(coefficient = coef)
+    df_list <- append(df_list, list(res_df))
+    }
+  
+  df <- do.call(rbind, df_list) |>
+    left_join(homologs, by = c("dog_gene_id" = "gene_id"))
+  return(df)}
 ```
 
-
 ```{r}
-# IMPORT NECESSARY DATA
-tx2gene <- build_tx2gene(gtf_file_path)
-sample_sheet <- prepare_samples(sample_sheet_path, time_levels)
-txi <- import_kallisto(kallisto_path, tx2gene, sample_sheet)
-counts <- process_counts(txi$counts, sample_sheet)
+# SET WORKING DIRECTORY
+setwd("D:/canine-seq")
+wd <- getwd()
 
-all(rownames(sample_sheet)==colnames(txi))
+# SET CONSTANTS
+min_alpha = 0.05
+min_logfold = 0
+time_levels = c(0, 3, 7, 10, 28, 49)
+min_count = 10
+min_samples = 2
+
+# SET FILE PATHS
+sample_sheet_path = "D:/canine-seq/data/ORBIT/sample_sheet.csv"
+gtf_path = "D:/canine-seq/reference/dog/canfam4/Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.116.gtf.gz"
+kallisto_path = "D:/canine-seq/results/ORBIT/kallisto"
+homolog_path = "D:/canine-seq/data/ORBIT/Canis_lupus_familiaris-GCA_011100685.1-2021_03-homology.tsv"
+
+# IMPORT NECESSARY DATA
+tx2gene <- prep_tx2gene(gtf_path)
+sample_sheet <- prep_samples(sample_sheet_path, time_levels)
+txi <- prep_kallisto(kallisto_path, tx2gene, sample_sheet)
+counts <- process_counts(txi$counts, sample_sheet)
+homologs <- prep_homologs(homolog_path)
 ```
 
 ```{r}
 #QUALITY CONTROL
-# Count distribution per sample. They should have about equal distributions. 
+# Count distribution per sample. They should have about equal distributions to fulfill the assumptions of the DESeq2 model.
 counts |> 
   ggplot() +
   geom_histogram(aes(x=log2(count+1)), position = "identity", bins = 200) +
@@ -155,10 +176,8 @@ counts |>
              cols = vars(time))
 ```
 
-
 ```{r}
 # MODEL FITTING
-
 # TIME + SUBJECT LRT W/ TIME AS FACTOR # non linear effects over time
 # shows the genes that are differentially expressed over time accounting for variation between subjects
 dds <- run_model(txi,
@@ -171,6 +190,30 @@ dds <- run_model(txi,
                   min_samples = min_samples)
 
 counts_norm <- process_counts(counts(dds, normalized = TRUE), sample_sheet)
+
+  df_list <- list()
+  for (coef in resultsNames(dds)[-1]){
+    res_shrunk <- lfcShrink(dds, coef = coef, type = "apeglm")
+    res_df <- process_results(res_shrunk, tx2gene, min_alpha = 100000, min_logfold = 0) |>
+      mutate(coefficient = coef)
+    df_list <- append(df_list, list(res_df))
+  }
+  
+  df <- do.call(rbind, df_list) 
+  
+  df <- left_join(df, homologs, by = c("gene_id" = "dog_gene_id"))
+  
+  
+  
+  df_filter <- df |>
+  mutate(regulation = case_when(
+    (padj < min_alpha & abs(log2FoldChange) > min_logfold & log2FoldChange > 0) ~ "upregulated",
+     (padj < min_alpha & abs(log2FoldChange) > min_logfold & log2FoldChange < 0) ~ "downregulated",
+    T ~ "nonDE")) |>
+  filter(regulation != "nonDE" & coefficient != "subject_2_vs_1") |>
+  mutate(time = str_extract(coefficient, "(?<=time_)\\d+"))
+  
+#df <- extract_coefs(dds, tx2gene, homologs, min_alpha = 1000000, min_logfold = 0)
 ```
 
 ```{r}
@@ -179,7 +222,6 @@ glimmaMDS(dds) #color by subject, shape by time.
 
 #normalizationFactors(dds)
 plotDispEsts(dds) # Black points should cluster around the fitted line.
-
 
 # visualizing shrinkage of log fold change
 res <- results(dds)
@@ -190,40 +232,10 @@ plotMA(resLFC, alpha = 0.1, ylim = c(-2, 2), cex=1.5, main = "MA-plot after LFC 
 ```
 
 ```{r}
-# getting a data frame that has log fold change, p val and gene name for every coefficient
-coefficients <- resultsNames(dds)
 
-df_list <- list()
-for (coef in coefficients[-1]){
-  res_shrunk <- lfcShrink(dds, coef = coef, type = "apeglm")
-  res_df <- process_results(res_shrunk, tx2gene, min_alpha = 10000, min_logfold = 0)
-  res_df <- res_df |>
-    mutate(coefficient = coef)
-  df_list <- append(df_list, list(res_df))
-}
-
-df <- do.call(rbind, df_list)
 ```
 
-```{r}
-df_filter <- df |>
-  mutate(regulation = case_when(
-    (padj < min_alpha & abs(log2FoldChange) > min_logfold & log2FoldChange > 0) ~ "upregulated",
-     (padj < min_alpha & abs(log2FoldChange) > min_logfold & log2FoldChange < 0) ~ "downregulated",
-    T ~ "nonDE")) |>
-  filter(regulation != "nonDE" & coefficient != "subject_2_vs_1") |>
-  mutate(time = str_extract(coefficient, "(?<=time_)\\d+"))
-```
-
-
-```{r}
-plot_df <- df_filter |>
-  left_join(counts_norm, by = c("gene_id", "gene_name"))
-  
-```
-
-
-```{r}
+```{r eval = FALSE}
 glimmaMA(dds, groups = colData(dds)$time)
 glimmaVolcano(dds, groups = colData(dds)$time)
 
@@ -232,21 +244,20 @@ print(summary(res))
 #res_no_filter <- process_results(res, tx2gene, min_alpha = 10000, min_logfold = 0)
 #res_df <- process_results(res, tx2gene, min_alpha, min_logfold)
 
-upregulated <- res_df |>
-  filter(log2FoldChange > 0)
+#upregulated <- res_df |>
+#  filter(log2FoldChange > 0)
 
-up_genes <- upregulated$gene_name
+#up_genes <- upregulated$gene_name
 
-downregulated <- res_df |>
-  filter(log2FoldChange < 0)
+#downregulated <- res_df |>
+#  filter(log2FoldChange < 0)
 
-down_genes <- downregulated$gene_name
+#down_genes <- downregulated$gene_name
 
-plotCounts(dds, gene = "ENSCAFG00805019251", intgroup = c("time"), main = "ENSCAFG00805019251")
+plotCounts(dds, gene = "ENSCAFG00805014647", intgroup = c("time"), main = "ENSCAFG00805014647")
 ```
 
-
-```{r}
+```{r eval = FALSE}
 counts_norm |>
 filter(gene_name %in% up_genes) |>
 ggplot(aes(x = time, y = count, color = subject)) +
@@ -271,24 +282,6 @@ ggplot(aes(x = time, y = count, color = subject)) +
        title = "Downregulated Genes")
 ```
 
-
 ```{r}
-entrez_ids <- mapIds(org.Cf.eg.db,
-                     keys = res_no_filter$gene_id,
-                     keytype = "ENSEMBL",
-                     column = "ENTREZID")
 
-
-ensembl_to_entrez <- AnnotationDbi::select(
-  org.Cf.eg.db,
-  keys = res_no_filter$gene_id,
-  columns = c("ENSEMBL", "ENTREZID"), 
-  keytype = "ENSEMBL"
-)
-
-res_no_filter |>
-  dplyr::inner_join(ensembl_to_entrez, by = dplyr::join_by(gene_id == ENSEMBL)) |>
-  dplyr::select(ensembl_gene_id, ENTREZID, dplyr::everything()) -> de_res
-
-head(de_res)
 ```

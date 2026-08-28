@@ -12,14 +12,17 @@ editor_options:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+knitr::opts_chunk$set(echo = TRUE, message = TRUE)
 ```
 
 # Overview
+
 add info here
 
 # Setup
+
 ## Load Required Packages
+
 ```{r}
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
@@ -27,6 +30,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
 
 BiocManager::install(c("tidyverse",
                        "stringr",
+                       "kableExtra",
                        "rtracklayer",
                        "tximport",
                        "DESeq2",
@@ -37,6 +41,7 @@ BiocManager::install(c("tidyverse",
                        "clusterProfiler"))
 library(tidyverse)
 library(stringr)
+library(kableExtra)
 library(rtracklayer)
 library(tximport)
 library(DESeq2)
@@ -48,13 +53,16 @@ library(org.Hs.eg.db)
 ```
 
 ## Helper Functions
+
 ### prep_tx2gene
-Description:    
-**Input:**    
-**Output:**     
+
+Description:\
+**Input:**\
+**Output:**
+
 ```{r}
 prep_tx2gene <- function(gtf_path) {
-  print(paste0("Reading .gtf file from ", gtf_path, "..."))
+  print(paste0("Reading annotation file from ", gtf_path, "..."))
   tx2gene <- rtracklayer::readGFF(gtf_path) |>
     as.data.frame() |>
     dplyr::select(transcript_id,
@@ -71,26 +79,33 @@ prep_tx2gene <- function(gtf_path) {
 ```
 
 ### prep_samples
-Description:    
-**Input:**    
-**Output:**     
+
+Description:\
+**Input:**\
+**Output:**
+
 ```{r}
 prep_samples <- function(sample_sheet_path) {
-  print(paste0("Reading .csv file from ", sample_sheet_path, "..."))
+  print(paste0("Reading sample sheet from ", sample_sheet_path, "..."))
   sample_sheet <- read.csv(sample_sheet_path) |>
     dplyr::mutate(time_num = as.numeric(time),
                   time = factor(time, levels = sort(unique(time))),
+                  time_lab = factor(paste0("Day ", time)),
                   subject = factor(subject, levels = sort(unique(subject))),
+                  subject_lab = factor(paste0("Subject ", subject)),
                   sample_name = paste0("Subject ", subject, ", ", "Day ", time)) # readable sample name for visualizations
   rownames(sample_sheet) <- sample_sheet$sample_id
-  print(paste0("Found ", length(sample_sheet$sample_id), " samples in sample sheet."))
+  print(paste0("Found ", nrow(sample_sheet), " samples in sample sheet."))
   return(sample_sheet)
 }
 ```
+
 ### prep_kallisto
-Description:    
-**Input:**    
-**Output:**     
+
+Description:\
+**Input:**\
+**Output:**
+
 ```{r}
 prep_kallisto <- function(kallisto_path,
                           tx2gene,
@@ -109,106 +124,151 @@ prep_kallisto <- function(kallisto_path,
   return(txi)
 }
 ```
+
 ### prep_homologs
-Description:    
-**Input:**    
-**Output:**     
+
+Description:\
+**Input:**\
+**Output:**
+
 ```{r}
 prep_homologs <- function(homolog_path) {
   print(paste0("Reading csv from ", homolog_path, "..."))
   homologs <- read.csv(homolog_path, sep = "\t") |>
     dplyr::filter(ref_species == "homo_sapiens") |>
-    dplyr::select(ref_gene_stable_id, ref_gene_name, query_gene_stable_id, query_gene_name) |>
+    dplyr::select(ref_gene_stable_id,
+                  ref_gene_name,
+                  query_gene_stable_id,
+                  query_gene_name) |>
     dplyr::rename(human_gene_id = ref_gene_stable_id,
                   human_gene_name = ref_gene_name,
                   dog_gene_id = query_gene_stable_id,
                   dog_gene_name = query_gene_name)
+  print(paste0("Found ", length(unique(homologs$human_gene_id)), " homologous genes in humans."))
   return(homologs)
 }
 ```
+
 ### run_model
-Description:    
-**Input:**    
-**Output:**     
+
+Description:\
+**Input:**\
+**Output:**
+
 ```{r}
-run_model <- function(txi = txi, sample_sheet, design, reduced, test = "Wald", col, min_count = 10, min_samples = 3) {
-  dds <- DESeqDataSetFromTximport(txi, colData = sample_sheet, design = design)
+run_model <- function(txi = txi,
+                      sample_sheet,
+                      design,
+                      reduced,
+                      test = "Wald",
+                      min_count,
+                      min_samples) {
+  dds <- DESeqDataSetFromTximport(txi,
+                                  colData = sample_sheet,
+                                  design = design)
   keep <- rowSums(counts(dds) >= min_count) >= min_samples # filtering for low counts
   dds <- dds[keep, ]
 
   if (test == "LRT") {
-    dds <- DESeq(dds, test = test, reduced = reduced)
+    dds <- DESeq(dds,
+                 test = test,
+                 reduced = reduced)
   } else {
-    dds <- DESeq(dds, test = test)
+    dds <- DESeq(dds,
+                 test = test)
   }
   return(dds)
 }
 ```
+
 ### process_counts
-Description:    
-**Input:**    
-**Output:**     
+
+Description:\
+**Input:**\
+**Output:**
+
 ```{r}
 process_counts <- function(counts, sample_sheet) {
+  genes <- tx2gene |>
+    dplyr::select(-transcript_id) |>
+    dplyr::distinct()
   counts <- counts |>
     as.data.frame() |>
     rownames_to_column("gene_id") |>
-    pivot_longer(
-      cols = starts_with("OR"),
-      names_to = "sample_id",
-      values_to = "count"
-    ) |>
+    pivot_longer(cols = starts_with("OR"),
+                 names_to = "sample_id",
+                 values_to = "count") |>
     left_join(sample_sheet, by = "sample_id") |>
-    left_join(tx2gene, by = "gene_id") |>
-    dplyr::select(-transcript_id) |>
+    left_join(genes, by = "gene_id") |>
     dplyr::distinct(gene_id, sample_id, .keep_all = TRUE)
   return(counts)
 }
 ```
+
 ### process_results
-Description:    
-**Input:**    
-**Output:**     
+
+Description:\
+**Input:**\
+**Output:**
+
 ```{r}
-process_results <- function(res, tx2gene, min_alpha = 0.05, min_logfold = 1) {
+process_results <- function(res,
+                            tx2gene,
+                            min_alpha = 0.05,
+                            min_logfold = 1) {
   res <- res |>
     as.data.frame() |>
     rownames_to_column("gene_id") |>
-    left_join(tx2gene, by = "gene_id") |>
+    left_join(tx2gene,
+              by = "gene_id") |>
     dplyr::select(-transcript_id) |>
     dplyr::distinct(gene_id, .keep_all = TRUE) |>
-    dplyr::filter(!is.na(padj)) |> # genes with extreme outliers are set to NA
+    dplyr::filter(!is.na(padj)) |> # genes with extreme outliers are set to NA in DESeq2
     dplyr::arrange(padj) |>
-    dplyr::filter(padj <= min_alpha) |>
-    dplyr::filter(abs(log2FoldChange) >= min_logfold)
+    dplyr::filter(padj < min_alpha) |>
+    dplyr::filter(abs(log2FoldChange) > min_logfold)
   return(res)
 }
 ```
+
 ### extract_coefs
-Description:    
-**Input:**    
-**Output:**     
+
+Description:\
+**Input:**\
+**Output:**
+
 ```{r}
-extract_coefs <- function(dds, tx2gene, homologs, min_alpha, min_logfold) {
+extract_coefs <- function(dds,
+                          tx2gene,
+                          homologs,
+                          min_alpha,
+                          min_logfold) {
   # getting a data frame that has log fold change, p val and gene name for every coefficient
   coefficients <- resultsNames(dds)
-
   df_list <- list()
   for (coef in coefficients[-1]) {
     res_shrunk <- lfcShrink(dds, coef = coef, type = "apeglm")
-    res_df <- process_results(res_shrunk, tx2gene, min_alpha, min_logfold) |>
-      dplyr::mutate(coefficient = coef)
+    res_df <- process_results(res_shrunk,
+                              tx2gene,
+                              min_alpha,
+                              min_logfold) |>
+    dplyr::mutate(coefficient = coef)
     df_list <- append(df_list, list(res_df))
   }
-
   df <- do.call(rbind, df_list) |>
-    left_join(homologs, by = c("dog_gene_id" = "gene_id"))
+    left_join(homologs, by = c("gene_id" = "dog_gene_id")) |>
+    mutate(regulation = case_when(
+    (padj < min_alpha & abs(log2FoldChange) > min_logfold & log2FoldChange > 0) ~ "upregulated",
+    (padj < min_alpha & abs(log2FoldChange) > min_logfold & log2FoldChange < 0) ~ "downregulated",
+    T ~ "nonDE"))
   return(df)
 }
 ```
 
 ## Set Constants
+
 ### Parameters
+
 ```{r}
 min_alpha <- 0.05
 min_logfold <- 0
@@ -217,6 +277,7 @@ min_samples <- 2
 ```
 
 ### File Locations
+
 ```{r}
 setwd("D:/canine-seq")
 sample_sheet_path <- "D:/canine-seq/data/ORBIT/sample_sheet.csv"
@@ -226,72 +287,109 @@ homolog_path <- "D:/canine-seq/data/ORBIT/Canis_lupus_familiaris-GCA_011100685.1
 ```
 
 ## Data Import
+
 ```{r}
-tx2gene <- prep_tx2gene(gtf_path)
 sample_sheet <- prep_samples(sample_sheet_path)
-txi <- prep_kallisto(kallisto_path, tx2gene, sample_sheet)
+sample_sheet |>
+  dplyr::select(subject, time, batch, sex, breed, age, cancer_type) |>
+  kbl(col.names = c("Subject",
+                    "Time",
+                    "Batch",
+                    "Sex",
+                    "Breed",
+                    "Age",
+                    "Cancer Type"),
+      row.names = FALSE,
+      caption = "Sample Overview") |>
+  collapse_rows(columns = 1, valign = "top") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
+  scroll_box(width = "100%", height = "50%")
+
+tx2gene <- prep_tx2gene(gtf_path)
 homologs <- prep_homologs(homolog_path)
+txi <- prep_kallisto(kallisto_path, tx2gene, sample_sheet)
 counts <- process_counts(txi$counts, sample_sheet)
 ```
 
-
 # Quality Control
+
 ```{r}
-# QUALITY CONTROL
-# Count distribution per sample. They should have about equal distributions to fulfill the assumptions of the DESeq2 model.
+counts |>
+    summarize(total_count = sum(count),
+            mean_count = mean(count),
+            sd_count = sd(count),
+            max_count = max(count),
+            num_genes = sum(count > 0),
+            .by = c("subject", "time")) |>
+  kbl(col.names = c("Subject", "Time", "Total Count", "Mean Count", "Standard Deviation", "Max Count", "Number of Genes"),
+      format.args = list(big.mark = ","),
+      row.names = FALSE,
+      caption = "Distribution of Unnormalized Gene Counts Across Samples") |>
+  collapse_rows(columns = 1, valign = "top") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
+  scroll_box(width = "100%", height = "50%")
+```
+
+If there are large differences in the counts between samples, that could indicate problems with the sample or sequencing or uneven sequencing depth. Values will be normalized downstream using DESeq2.
+
+```{r}
 counts |>
   ggplot() +
   geom_histogram(aes(x = log2(count + 1)), position = "identity", bins = 200) +
-  labs(
-    x = "log2(count +1)",
-    y = "Number of Genes"
-  ) +
-  facet_grid(
-    rows = vars(subject),
-    cols = vars(time)
-  )
+    facet_grid(rows = vars(subject_lab),
+             cols = vars(time_lab)) +
+  theme_bw() +
+  labs(x = "log2(count + 1)",
+       y = "Number of Genes",
+       title = "Count Distribution by Sample")
 ```
 
+In order to fulfill the assumptions of the negative binomial model used by DESeq2, the distribution of counts should be approximately the same. Count data is expected to be right skewed.
 
 # Differential Expression
+
+## Model Fitting: Differential Expression over Time
+
+This model uses the likelihood ratio test to model the change in gene expression over time, accounting for variation between subjects.
+
 ```{r}
-# MODEL FITTING
-# TIME + SUBJECT LRT W/ TIME AS FACTOR # non linear effects over time
-# shows the genes that are differentially expressed over time accounting for variation between subjects
 dds <- run_model(txi,
   sample_sheet,
   design = ~ subject + time,
-  reduced = ~subject,
+  reduced = ~ subject,
   test = "LRT",
-  col = time,
   min_count = min_count,
-  min_samples = min_samples
-)
+  min_samples = min_samples)
+```
 
-counts_norm <- process_counts(counts(dds, normalized = TRUE), sample_sheet)
+### Normalized Counts
 
-df_list <- list()
-for (coef in resultsNames(dds)[-1]) {
-  res_shrunk <- lfcShrink(dds, coef = coef, type = "apeglm")
-  res_df <- process_results(res_shrunk, tx2gene, min_alpha = 100000, min_logfold = 0) |>
-    mutate(coefficient = coef)
-  df_list <- append(df_list, list(res_df))
-}
+This calculation does NOT include genes that were filtered out by pre-filtering and DESeq2.
 
-df <- do.call(rbind, df_list)
+```{r}
+counts_norm <- counts(dds, normalized = TRUE)  
+counts_norm <- process_counts(counts_norm, sample_sheet)
+counts_norm |>
+    summarize(total_count = sum(count),
+            mean_count = mean(count),
+            sd_count = sd(count),
+            max_count = max(count),
+            num_genes = sum(count > 0),
+            .by = c("subject", "time")) |>
+  kbl(col.names = c("Subject", "Time", "Total Count", "Mean Count", "Standard Deviation", "Max Count", "Number of Genes"),
+      format.args = list(big.mark = ","),
+      row.names = FALSE,
+      caption = "Distribution of Normalized Gene Counts Across Samples") |>
+  collapse_rows(columns = 1, valign = "top") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
+  scroll_box(width = "100%", height = "50%")
+```
 
-df <- left_join(df, homologs, by = c("gene_id" = "dog_gene_id"))
+```{r}
+df <- extract_coefs(dds, tx2gene, homologs, min_alpha = 1000000, min_logfold = 0)
 
-df_filter <- df |>
-  mutate(regulation = case_when(
-    (padj < min_alpha & abs(log2FoldChange) > min_logfold & log2FoldChange > 0) ~ "upregulated",
-    (padj < min_alpha & abs(log2FoldChange) > min_logfold & log2FoldChange < 0) ~ "downregulated",
-    T ~ "nonDE"
-  )) |>
-  filter(regulation != "nonDE" & coefficient != "subject_2_vs_1" & coefficient != "time_49_vs_0" & coefficient != "time_10_vs_0") |>
-  mutate(time = str_extract(coefficient, "(?<=time_)\\d+"))
-
-# df <- extract_coefs(dds, tx2gene, homologs, min_alpha = 1000000, min_logfold = 0)
+df_filter <- extract_coefs(dds, tx2gene, homologs, min_alpha = min_alpha, min_logfold = min_logfold) |>
+  dplyr::filter(regulation != "nonDE" & coefficient != "subject_2_vs_1" & coefficient != "time_49_vs_0" & coefficient != "time_10_vs_0")
 ```
 
 ```{r}
@@ -357,7 +455,8 @@ counts_norm |>
 ```
 
 # Gene Set Enrichment
-```{r}
+
+```{r eval = FALSE}
 msigdbr_collections()
 
 hallmark <- msigdbr(collection = "H") |>
@@ -382,7 +481,7 @@ C72 <- msigdbr(collection = "C7", subcollection = "IMMUNESIGDB") |>
   dplyr::select(gs_name, gs_description)
 ```
 
-```{r}
+```{r eval = FALSE}
 time_3 <- df |>
   filter(coefficient == "time_3_vs_0" & !is.na(human_gene_name)) |>
   arrange(padj, log2FoldChange) |>
@@ -419,8 +518,7 @@ time_49 <- df |>
 eh49 <- GSEA(time_49, TERM2GENE = hallmark, TERM2NAME = h2, seed = TRUE)
 ```
 
-
-```{r}
+```{r eval = FALSE}
 all <- df |>
   filter(!is.na(human_gene_name)) |>
   arrange(padj, log2FoldChange) |>
@@ -435,7 +533,7 @@ ehall <- GSEA(all, TERM2GENE = hallmark, TERM2NAME = h2, seed = TRUE)
 enrichplot::gseaplot2(ehall, geneSetID = c(1, 2, 3))
 ```
 
-```{r}
+```{r eval = FALSE}
 # GSEA_GO <- gseGO(geneList = all,
 #                   ont = "BP",
 #                   OrgDb = org.Hs.eg.db,

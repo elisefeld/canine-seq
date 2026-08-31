@@ -14,10 +14,12 @@ RELEASE = config['run']['ref_release']
 
 # Directory declaration and creation
 DATA_DIR = os.path.join(config['path']['raw_data_dir'], PROJECT) 
-RESULTS_DIR = os.path.join(config['path']['results_dir'], PROJECT)
-REPORT_DIR = os.path.join(config['path']['report_dir'], PROJECT)
 REF_DIR = os.path.join(config['path']['reference_dir'], f'{SPECIES}_{BUILD}_{RELEASE}')
-dirs = [DATA_DIR, RESULTS_DIR, REPORT_DIR, REF_DIR]
+RESULTS_DIR = os.path.join(config['run']['run_name'], config['path']['results_dir'])
+REPORT_DIR = os.path.join(config['run']['run_name'], config['path']['report_dir'])
+LOG_DIR = os.path.join(config['run']['run_name'], config['path']['log_dir'])
+
+dirs = [DATA_DIR, REF_DIR, RESULTS_DIR, REPORT_DIR, LOG_DIR]
 for dir in dirs:
     os.makedirs(dir,exist_ok=True)
     print(f'Project directory \'{dir}\' created successfully')
@@ -66,10 +68,10 @@ print(f'Running analysis of {len(SAMPLES)} RNA-seq samples for {PROJECT} project
 # Declaring desired outputs for the pipeline
 rule all:
     input: 
-        expand(f'{RESULTS_DIR}/qc/flagstat/{{sample}}.txt', sample=SAMPLES),
-        expand(f'{RESULTS_DIR}/qc/fastqc/{{sample}}_R1_fastqc.html', sample=SAMPLES),
-        expand(f'{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.html', sample=SAMPLES),
-        expand(f'{RESULTS_DIR}/qc/fastp/{{sample}}.json', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/flagstat/{{sample}}.txt', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.html', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.html', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/fastp/{{sample}}.json', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES), #*
         expand(f'{RESULTS_DIR}/hisat2/{{sample}}.bam', sample=SAMPLES)
         #f'{REPORT_DIR}/multiqc_report.html', #*
@@ -83,7 +85,7 @@ rule kallisto_index:
     output: 
         idx=f'{REF_DIR}/{SPECIES}.{BUILD}.idx'
     threads:
-        config['kallisto']['threads']
+        config['threads']['kallisto']
     log:
         f'{RESULTS_DIR}/logs/kallisto/kallistoindex.log'
     shell:
@@ -107,7 +109,7 @@ rule hisat2_index:
             ".7.ht2",
             ".8.ht2")
     threads:
-        config['hisat2']['threads']
+        config['threads']['hisat2']
     log:
         f'{RESULTS_DIR}/logs/hisat2/hisat2index.log'
     shell:
@@ -123,7 +125,7 @@ rule flagstat:
     input: 
         cram=f'{DATA_DIR}/{{sample}}.cram',
     output: 
-        txt=f'{RESULTS_DIR}/qc/flagstat/{{sample}}.txt'
+        txt=f'{RESULTS_DIR}/flagstat/{{sample}}.txt'
     shell:
         '''
         echo 'Running samtools flagstat on {input.cram}...'
@@ -136,7 +138,7 @@ rule sort:
     output:
         sorted_cram=temp(f'{RESULTS_DIR}/sort/{{sample}}.cram')
     threads:
-        config['samtools']['threads']
+        config['threads']['samtools']
     log:
         f'{RESULTS_DIR}/logs/sort/{{sample}}_samtoolssort.log'
     shell:
@@ -152,7 +154,7 @@ rule fastq:
         read1=temp(f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz'),
         read2=temp(f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'),
     threads: 
-        config['fastq']['threads']
+        config['threads']['fastq']
     log:
         f'{RESULTS_DIR}/logs/fastq/{{sample}}_fastq.log'
     shell:
@@ -166,18 +168,18 @@ rule fastqc:
         read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
         read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        html1=f'{RESULTS_DIR}/qc/fastqc/{{sample}}_R1_fastqc.html',
-        html2=f'{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.html',
-        zip1=f'{RESULTS_DIR}/qc/fastqc/{{sample}}_R1_fastqc.zip',
-        zip2=f'{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.zip',
+        html1=f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.html',
+        html2=f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.html',
+        zip1=f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.zip',
+        zip2=f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.zip',
     threads:
-        config['fastqc']['threads']
+        config['threads']['fastqc']
     log:
         f'{RESULTS_DIR}/logs/fastqc/{{sample}}_fastqc.log'
     shell:
         '''
         echo 'Running a quality control report for {input.read1} and {input.read2}...'
-        fastqc -o {RESULTS_DIR}/qc/fastqc -t {threads} {input.read1} {input.read2} &> {log}
+        fastqc -o {RESULTS_DIR}/fastqc -t {threads} {input.read1} {input.read2} &> {log}
         '''
 
 rule fastp:
@@ -185,12 +187,12 @@ rule fastp:
         read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
         read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        trimmed_read1=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        trimmed_read2=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz',
-        html=f'{RESULTS_DIR}/qc/fastp/{{sample}}.html',
-        json=f'{RESULTS_DIR}/qc/fastp/{{sample}}.json'
+        trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
+        html=f'{RESULTS_DIR}/fastp/{{sample}}.html',
+        json=f'{RESULTS_DIR}/fastp/{{sample}}.json'
     threads:
-        config['fastp']['threads']
+        config['threads']['fastp']
     log:
         f'{RESULTS_DIR}/logs/fastp/{{sample}}_fastp.log'
     shell:
@@ -205,8 +207,8 @@ rule fastp:
 rule kallisto_quant:
     input:
         idx=f'{REF_DIR}/{SPECIES}.{BUILD}.idx',
-        trimmed_read1=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        trimmed_read2=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz',
+        trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
     params:
         out_dir=f'{RESULTS_DIR}/kallisto/{{sample}}',
         sample='{sample}'
@@ -217,7 +219,7 @@ rule kallisto_quant:
     log: 
         f'{RESULTS_DIR}/logs/kallisto/{{sample}}_kallistoquant.log'
     threads:
-        config['kallisto']['threads']
+        config['threads']['kallisto']
     shell:
         '''
         echo 'Running kallisto pseudoalignment for {input.trimmed_read1} and {input.trimmed_read2}'
@@ -236,29 +238,34 @@ rule hisat2_align:
             ".6.ht2",
             ".7.ht2",
             ".8.ht2"),
-        trimmed_read1=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        trimmed_read2=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz',
+        trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
     threads:
-        config['hisat2']['threads']
+        config['threads']['hisat2']
     output:
-        bam = f'{RESULTS_DIR}/hisat2/{{sample}}.bam'
+        sam = f'{RESULTS_DIR}/hisat2/{{sample}}.sam'
     log:
         f'{RESULTS_DIR}/logs/hisat2/{{sample}}_hisat2align.log'
     shell:
         '''
         echo 'Running HISAT2 alignment for {input.trimmed_read1} and {input.trimmed_read2}'
-        hisat2 -x genome --threads {threads} -1 {input.trimmed_read1} -2 {input.trimmed_read2} -S {output.bam} &> {log}
-        '''
+        hisat2 -x genome \
+        --threads {threads} \
+        -1 {input.trimmed_read1} \
+        -2 {input.trimmed_read2} \
+        -S {output.bam} \
+        &> {log}
+        ''''
 
 ###########################
 ######### REPORT ##########
 ###########################
 rule multiqc:
     input:
-        expand(f'{RESULTS_DIR}/qc/flagstat/{{sample}}.txt', sample=SAMPLES),
-        expand(f'{RESULTS_DIR}/qc/fastqc/{{sample}}_R1_fastqc.zip', sample=SAMPLES),
-        expand(f'{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.zip', sample=SAMPLES),
-        expand(f'{RESULTS_DIR}/qc/fastp/{{sample}}.json', sample = SAMPLES),
+        expand(f'{RESULTS_DIR}/flagstat/{{sample}}.txt', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.zip', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.zip', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/fastp/{{sample}}.json', sample = SAMPLES),
         expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/logs/kallisto/{{sample}}_kallistoquant.log', sample=SAMPLES)
     output:

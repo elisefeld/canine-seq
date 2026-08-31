@@ -11,6 +11,7 @@ PROJECT = config['project']['name']
 SPECIES = config['run']['ref_species']
 BUILD = config['run']['ref_build']
 RELEASE = config['run']['ref_release']
+FASTA = config['ref']['fasta']
 
 # Directory declaration and creation
 DATA_DIR = os.path.join(config['path']['data_dir'], PROJECT) 
@@ -70,55 +71,13 @@ print(f'Running analysis of {len(SAMPLES)} RNA-seq samples for {PROJECT} project
 # Declaring desired outputs for the pipeline
 rule all:
     input: 
-        expand(f'{RESULTS_DIR}/flagstat/{{sample}}.txt', sample=SAMPLES),
+        #expand(f'{RESULTS_DIR}/flagstat/{{sample}}.txt', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.html', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.html', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastp/{{sample}}.json', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES), #*
-        expand(f'{RESULTS_DIR}/hisat2/{{sample}}.bam', sample=SAMPLES)
+        expand(f'{RESULTS_DIR}/bam/{{sample}}.bam', sample=SAMPLES)
         #f'{REPORT_DIR}/multiqc_report.html', #*
-
-###########################
-###### FILE INDEXING ######
-###########################
-rule kallisto_index:
-    input: 
-        fasta=f'{REF_DIR}/{SPECIES}.{BUILD}.cdna.all.fa.gz'
-    output: 
-        idx=f'{REF_DIR}/{SPECIES}.{BUILD}.idx'
-    threads:
-        config['threads']['kallisto']
-    log:
-        f'{RESULTS_DIR}/logs/kallisto/kallistoindex.log'
-    shell:
-        '''
-        echo 'Building kallisto index for {input.fasta}...'
-        kallisto index -i {output.idx} {input.fasta} -t {threads} &> {log}
-        '''
-
-rule hisat2_index:
-    input: 
-        fasta=f'{REF_DIR}/{SPECIES}.{BUILD}.cdna.all.fa.gz'
-    output: 
-        multiext(
-            f'{REF_DIR}/{SPECIES}.{BUILD}',
-            '.1.ht2',
-            '.2.ht2',
-            '.3.ht2',
-            '.4.ht2',
-            '.5.ht2',
-            '.6.ht2',
-            '.7.ht2',
-            '.8.ht2')
-    threads:
-        config['threads']['hisat2']
-    log:
-        f'{RESULTS_DIR}/logs/hisat2/hisat2index.log'
-    shell:
-        '''
-        echo 'Building hisat2 index for {input.fasta}...'
-        hisat2-build  --threads {threads} {input.fasta} f'{REF_DIR}/{SPECIES}.{BUILD}' &> {log}
-        '''
 
 ###########################
 ##### QUALITY CONTROL #####
@@ -134,6 +93,17 @@ rule flagstat:
         samtools flagstat {input.cram} > {output.txt}
         '''
 
+rule flagstat_aligned:
+    input: 
+        bam=f'{DATA_DIR}/{{sample}}.bam'
+    output: 
+        txt=f'{RESULTS_DIR}/flagstat/{{sample}}_aligned.txt'
+    shell:
+        '''
+        echo 'Running samtools flagstat on {input.bam}...'
+        samtools flagstat {input.bam} > {output.txt}
+        '''
+
 rule sort:
     input:
         cram=f'{DATA_DIR}/{{sample}}.cram'
@@ -142,7 +112,7 @@ rule sort:
     threads:
         config['threads']['samtools']
     log:
-        f'{RESULTS_DIR}/logs/sort/{{sample}}_samtoolssort.log'
+        f'{LOGS_DIR}/samtools/{{sample}}_sort.log'
     shell:
         '''
         echo 'Sorting {input.cram} by name...'
@@ -158,7 +128,7 @@ rule fastq:
     threads: 
         config['threads']['fastq']
     log:
-        f'{RESULTS_DIR}/logs/fastq/{{sample}}_fastq.log'
+        f'{LOGS_DIR}/fastq/{{sample}}_fastq.log'
     shell:
         '''
         echo 'Extracting FASTQ files from {input.sorted_cram}...'
@@ -177,7 +147,7 @@ rule fastqc:
     threads:
         config['threads']['fastqc']
     log:
-        f'{RESULTS_DIR}/logs/fastqc/{{sample}}_fastqc.log'
+        f'{LOGS_DIR}/fastqc/{{sample}}_fastqc.log'
     shell:
         '''
         echo 'Running a quality control report for {input.read1} and {input.read2}...'
@@ -196,11 +166,65 @@ rule fastp:
     threads:
         config['threads']['fastp']
     log:
-        f'{RESULTS_DIR}/logs/fastp/{{sample}}_fastp.log'
+        f'{LOGS_DIR}/fastp/{{sample}}_fastp.log'
     shell:
         '''
         echo 'Trimming reads for {input.read1} and {input.read2}...'
         fastp -V --thread {threads} -o {output.trimmed_read1} -O {output.trimmed_read2} -i {input.read1} -I {input.read2} -h {output.html} -j {output.json} &> {log}
+        '''
+rule sam_to_bam:
+    input:
+        sam=f'{RESULTS_DIR}/hisat2/{{sample}}.sam'
+    output: 
+        bam=f'{RESULTS_DIR}/bam/{{sample}}.bam'
+    log: 
+        f'{LOGS_DIR}/samtools/{{sample}}_samtobam.log'
+    shell:
+        '''
+        samtools view -bS {input.sam} -o {output.bam} &> {log}
+        '''
+
+
+###########################
+###### FILE INDEXING ######
+###########################
+rule kallisto_index:
+    input: 
+        fasta=f'{REF_DIR}/{FASTA}'
+    output: 
+        idx=f'{REF_DIR}/{FASTA}.idx'
+    threads:
+        config['threads']['kallisto']
+    log:
+        f'{LOGS_DIR}/kallisto/index.log'
+    shell:
+        '''
+        echo 'Building kallisto index for {input.fasta}...'
+        kallisto index -i {output.idx} {input.fasta} -t {threads} &> {log}
+        '''
+
+rule hisat2_index:
+    input: 
+        fasta=f'{REF_DIR}/{FASTA}'
+    output: 
+        multiext(
+            f'{REF_DIR}/{SPECIES}.{BUILD}',
+            '.1.ht2',
+            '.2.ht2',
+            '.3.ht2',
+            '.4.ht2',
+            '.5.ht2',
+            '.6.ht2',
+            '.7.ht2',
+            '.8.ht2')
+    threads:
+        config['threads']['hisat2']
+    log:
+        f'{LOGS_DIR}/hisat2/index.log'
+    shell:
+        '''
+        echo 'Building hisat2 index for {input.fasta}...'
+        hisat2-build  --threads {threads} {input.fasta} f'{REF_DIR}/{SPECIES}.{BUILD}' &> {log}
         '''
 
 ###########################
@@ -208,7 +232,7 @@ rule fastp:
 ###########################
 rule kallisto_quant:
     input:
-        idx=f'{REF_DIR}/{SPECIES}.{BUILD}.idx',
+        idx=f'{REF_DIR}/{FASTA}.idx',
         trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
         trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
     params:
@@ -219,7 +243,7 @@ rule kallisto_quant:
         h5=f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.h5',
         json=f'{RESULTS_DIR}/kallisto/{{sample}}/run_info.json'
     log: 
-        f'{RESULTS_DIR}/logs/kallisto/{{sample}}_kallistoquant.log'
+        f'{LOGS_DIR}/kallisto/{{sample}}_quant.log'
     threads:
         config['threads']['kallisto']
     shell:
@@ -245,9 +269,9 @@ rule hisat2_align:
     threads:
         config['threads']['hisat2']
     output:
-        sam = f'{RESULTS_DIR}/hisat2/{{sample}}.sam'
+        sam=temp(f'{RESULTS_DIR}/hisat2/{{sample}}.sam')
     log:
-        f'{RESULTS_DIR}/logs/hisat2/{{sample}}_hisat2align.log'
+        f'{LOGS_DIR}/hisat2/{{sample}}_align.log'
     shell:
         '''
         echo 'Running HISAT2 alignment for {input.trimmed_read1} and {input.trimmed_read2}'
@@ -255,7 +279,7 @@ rule hisat2_align:
         --threads {threads} \
         -1 {input.trimmed_read1} \
         -2 {input.trimmed_read2} \
-        -S {output.bam} \
+        -S {output.sam} \
         &> {log}
         '''
 
@@ -265,15 +289,16 @@ rule hisat2_align:
 rule multiqc:
     input:
         expand(f'{RESULTS_DIR}/flagstat/{{sample}}.txt', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/flagstat/{{sample}}_aligned.txt', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.zip', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.zip', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastp/{{sample}}.json', sample = SAMPLES),
         expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES),
-        expand(f'{RESULTS_DIR}/logs/kallisto/{{sample}}_kallistoquant.log', sample=SAMPLES)
+        expand(f'{LOGS_DIR}/kallisto/{{sample}}_quant.log', sample=SAMPLES),
     output:
         html=f'{REPORT_DIR}/multiqc_report.html'
     log: 
-        f'{RESULTS_DIR}/logs/multiqc.log'
+        f'{LOGS_DIR}/multiqc.log'
     shell:
         '''
         multiqc {DATA_DIR} {RESULTS_DIR} -o {REPORT_DIR} &> {log}

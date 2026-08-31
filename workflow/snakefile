@@ -74,7 +74,9 @@ rule all:
         expand(f'{RESULTS_DIR}/hisat2/{{sample}}.bam', sample=SAMPLES)
         #f'{REPORT_DIR}/multiqc_report.html', #*
 
-
+###########################
+###### FILE INDEXING ######
+###########################
 rule kallisto_index:
     input: 
         fasta=f'{REF_DIR}/{SPECIES}.{BUILD}.cdna.all.fa.gz'
@@ -111,11 +113,11 @@ rule hisat2_index:
     shell:
         '''
         echo 'Building hisat2 index for {input.fasta}...'
-        hisat2-build  --threads {threads} {input.fasta} &> {log}
+        hisat2-build  --threads {threads} {input.fasta} f'{REF_DIR}/{SPECIES}.{BUILD}' &> {log}
         '''
 
 ###########################
-## QUALITY CONTROL RULES ##
+##### QUALITY CONTROL #####
 ###########################
 rule flagstat:
     input: 
@@ -198,9 +200,8 @@ rule fastp:
         '''
 
 ###########################
-##### PSEUDOALIGNMENT #####
+####### ALIGNMENT  ########
 ###########################
-
 rule kallisto_quant:
     input:
         idx=f'{REF_DIR}/{SPECIES}.{BUILD}.idx',
@@ -222,6 +223,7 @@ rule kallisto_quant:
         echo 'Running kallisto pseudoalignment for {input.trimmed_read1} and {input.trimmed_read2}'
         kallisto quant -i {input.idx} -o {params.out_dir} -t {threads} {input.trimmed_read1} {input.trimmed_read2} &> {log}
         '''
+
 rule hisat2_align:
     input:
         multiext(
@@ -247,7 +249,6 @@ rule hisat2_align:
         echo 'Running HISAT2 alignment for {input.trimmed_read1} and {input.trimmed_read2}'
         hisat2 -x genome --threads {threads} -1 {input.trimmed_read1} -2 {input.trimmed_read2} -S {output.bam} &> {log}
         '''
-
 
 ###########################
 ######### REPORT ##########

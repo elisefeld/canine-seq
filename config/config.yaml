@@ -25,7 +25,7 @@ ref:
   fasta: "genome.fa"
 
 path: # Do NOT change these unless you are confident in directory structure and file locations.
-  run_dir: "run"
+  run_dir: "runs"
   data_dir: "data"
   reference_dir: "reference"
   results_dir: "results"

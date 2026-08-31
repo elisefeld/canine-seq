@@ -71,13 +71,14 @@ print(f'Running analysis of {len(SAMPLES)} RNA-seq samples for {PROJECT} project
 # Declaring desired outputs for the pipeline
 rule all:
     input: 
-        #expand(f'{RESULTS_DIR}/flagstat/{{sample}}.txt', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/flagstat/{{sample}}.txt', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/flagstat/{{sample}}_aligned.txt', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.html', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.html', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastp/{{sample}}.json', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES), #*
-        expand(f'{RESULTS_DIR}/bam/{{sample}}.bam', sample=SAMPLES)
-        #f'{REPORT_DIR}/multiqc_report.html', #*
+        expand(f'{RESULTS_DIR}/bam/{{sample}}.bam', sample=SAMPLES),
+        f'{REPORT_DIR}/multiqc_report.html', #*
 
 ###########################
 ##### QUALITY CONTROL #####
@@ -95,7 +96,7 @@ rule flagstat:
 
 rule flagstat_aligned:
     input: 
-        bam=f'{DATA_DIR}/{{sample}}.bam'
+        bam=f'{RESULTS_DIR}/bam/{{sample}}.bam'
     output: 
         txt=f'{RESULTS_DIR}/flagstat/{{sample}}_aligned.txt'
     shell:

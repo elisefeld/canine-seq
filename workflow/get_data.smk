@@ -1,3 +1,4 @@
+configfile: 'config/config.yaml'
 rule get_cdna:
     output: 
         f'{REF_DIR}/{SPECIES}.{BUILD}.cdna.all.fa.gz'

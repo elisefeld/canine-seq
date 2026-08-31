@@ -15,8 +15,8 @@ seq:
 
 run:
   sample_sheet: "sample_sheet.csv"
-  ref_species: canis_lupus_familiarisgsd
-  ref_build: UU_Cfam_GSD_1.0
+  ref_species: "Canis_lupus_familiarisgsd"
+  ref_build: "UU_Cfam_GSD_1.0"
   ref_release: 116
   run_by: Elise Hachfeld
 
@@ -40,4 +40,6 @@ fastp:
 
 kallisto:
   threads: 8
-  
+
+hisat2:
+  threads: 8

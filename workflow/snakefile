@@ -20,9 +20,9 @@ REF_DIR = os.path.join(config['path']['data_dir'], config['path']['reference_dir
 RUN_DIR = os.path.join(config['path']['run_dir'], config['run']['run_name'])
 RESULTS_DIR = os.path.join(RUN_DIR, config['path']['results_dir'])
 REPORT_DIR = os.path.join(RUN_DIR, config['path']['report_dir'])
-LOG_DIR = os.path.join(RUN_DIR, config['path']['log_dir'])
+LOGS_DIR = os.path.join(RUN_DIR, config['path']['log_dir'])
 
-dirs = [DATA_DIR, REF_DIR, RESULTS_DIR, REPORT_DIR, LOG_DIR]
+dirs = [DATA_DIR, REF_DIR, RESULTS_DIR, REPORT_DIR, LOGS_DIR]
 for dir in dirs:
     os.makedirs(dir,exist_ok=True)
     print(f'Project directory \'{dir}\' created successfully')
@@ -183,7 +183,6 @@ rule sam_to_bam:
         '''
         samtools view -bS {input.sam} -o {output.bam} &> {log}
         '''
-
 
 ###########################
 ###### FILE INDEXING ######

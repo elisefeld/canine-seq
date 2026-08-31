@@ -21,6 +21,9 @@ run:
   ref_release: "Custom"
   run_by: Elise Hachfeld
 
+ref: 
+  fasta: "genome.fa"
+
 path: # Do NOT change these unless you are confident in directory structure and file locations.
   run_dir: "run"
   data_dir: "data"
@@ -29,7 +32,6 @@ path: # Do NOT change these unless you are confident in directory structure and 
   report_dir: "report"
   log_dir: "logs"
   
-
 threads:
   samtools: 8
   fastq: 8

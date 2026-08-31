@@ -34,5 +34,6 @@ threads:
   samtools: 8
   fastq: 8
   fastqc: 8
+  fastp: 8
   kallisto: 8
   hisat2: 8

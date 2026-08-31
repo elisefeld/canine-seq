@@ -18,7 +18,7 @@ REF_DIR = os.path.join(config['path']['data_dir'], config['path']['reference_dir
 
 RUN_DIR = os.path.join(config['path']['run_dir'], config['run']['run_name'])
 RESULTS_DIR = os.path.join(RUN_DIR, config['path']['results_dir'])
-REPORT_DIR = os.path.join(RUN_DIR config['path']['report_dir'])
+REPORT_DIR = os.path.join(RUN_DIR, config['path']['report_dir'])
 LOG_DIR = os.path.join(RUN_DIR, config['path']['log_dir'])
 
 dirs = [DATA_DIR, REF_DIR, RESULTS_DIR, REPORT_DIR, LOG_DIR]
@@ -101,15 +101,15 @@ rule hisat2_index:
         fasta=f'{REF_DIR}/{SPECIES}.{BUILD}.cdna.all.fa.gz'
     output: 
         multiext(
-            f"{REF_DIR}/{SPECIES}.{BUILD}",
-            ".1.ht2",
-            ".2.ht2",
-            ".3.ht2",
-            ".4.ht2",
-            ".5.ht2",
-            ".6.ht2",
-            ".7.ht2",
-            ".8.ht2")
+            f'{REF_DIR}/{SPECIES}.{BUILD}',
+            '.1.ht2',
+            '.2.ht2',
+            '.3.ht2',
+            '.4.ht2',
+            '.5.ht2',
+            '.6.ht2',
+            '.7.ht2',
+            '.8.ht2')
     threads:
         config['threads']['hisat2']
     log:
@@ -125,7 +125,7 @@ rule hisat2_index:
 ###########################
 rule flagstat:
     input: 
-        cram=f'{DATA_DIR}/{{sample}}.cram',
+        cram=f'{DATA_DIR}/{{sample}}.cram'
     output: 
         txt=f'{RESULTS_DIR}/flagstat/{{sample}}.txt'
     shell:
@@ -136,7 +136,7 @@ rule flagstat:
 
 rule sort:
     input:
-        cram=f'{DATA_DIR}/{{sample}}.cram',
+        cram=f'{DATA_DIR}/{{sample}}.cram'
     output:
         sorted_cram=temp(f'{RESULTS_DIR}/sort/{{sample}}.cram')
     threads:
@@ -173,7 +173,7 @@ rule fastqc:
         html1=f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.html',
         html2=f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.html',
         zip1=f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.zip',
-        zip2=f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.zip',
+        zip2=f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.zip'
     threads:
         config['threads']['fastqc']
     log:
@@ -231,15 +231,15 @@ rule kallisto_quant:
 rule hisat2_align:
     input:
         multiext(
-            f"{REF_DIR}/{SPECIES}.{BUILD}",
-            ".1.ht2",
-            ".2.ht2",
-            ".3.ht2",
-            ".4.ht2",
-            ".5.ht2",
-            ".6.ht2",
-            ".7.ht2",
-            ".8.ht2"),
+            f'{REF_DIR}/{SPECIES}.{BUILD}',
+            '.1.ht2',
+            '.2.ht2',
+            '.3.ht2',
+            '.4.ht2',
+            '.5.ht2',
+            '.6.ht2',
+            '.7.ht2',
+            '.8.ht2'),
         trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
         trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
     threads:
@@ -257,7 +257,7 @@ rule hisat2_align:
         -2 {input.trimmed_read2} \
         -S {output.bam} \
         &> {log}
-        ''''
+        '''
 
 ###########################
 ######### REPORT ##########

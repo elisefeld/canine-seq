@@ -14,6 +14,7 @@ seq:
   lane: 1
 
 run:
+  run_name:  run_ORBIT_updatedref
   sample_sheet: "sample_sheet.csv"
   ref_species: "Canis_lupus_familiarisgsd"
   ref_build: "UU_Cfam_GSD_1.0"
@@ -25,21 +26,12 @@ path: # Do NOT change these unless you are confident in directory structure and 
   reference_dir: "reference"
   results_dir: "results"
   report_dir: "report"
+  log_dir: "logs"
 
-samtools:
-  threads: 8
-  
-fastq:
-  threads: 8
 
-fastqc:
-  threads: 8
-
-fastp:
-  threads: 8
-
-kallisto:
-  threads: 8
-
-hisat2:
-  threads: 8
+threads:
+  samtools: 8
+  fastq: 8
+  fastqc: 8
+  kallisto: 8
+  hisat2: 8

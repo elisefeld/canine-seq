@@ -15,9 +15,11 @@ RELEASE = config['run']['ref_release']
 # Directory declaration and creation
 DATA_DIR = os.path.join(config['path']['data_dir'], PROJECT) 
 REF_DIR = os.path.join(config['path']['data_dir'], config['path']['reference_dir'], f'{SPECIES}_{BUILD}_{RELEASE}')
-RESULTS_DIR = os.path.join(config['run']['run_name'], config['path']['results_dir'])
-REPORT_DIR = os.path.join(config['run']['run_name'], config['path']['report_dir'])
-LOG_DIR = os.path.join(config['run']['run_name'], config['path']['log_dir'])
+
+RUN_DIR = os.path.join(config['path']['run_dir'], config['run']['run_name'])
+RESULTS_DIR = os.path.join(RUN_DIR, config['path']['results_dir'])
+REPORT_DIR = os.path.join(RUN_DIR config['path']['report_dir'])
+LOG_DIR = os.path.join(RUN_DIR, config['path']['log_dir'])
 
 dirs = [DATA_DIR, REF_DIR, RESULTS_DIR, REPORT_DIR, LOG_DIR]
 for dir in dirs:

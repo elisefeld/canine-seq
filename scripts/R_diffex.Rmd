@@ -39,6 +39,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
 #                       "msigdbr",
 #                       "org.Hs.eg.db",
 #                       "clusterProfiler"))
+
 library(tidyverse)
 library(stringr)
 library(kableExtra)
@@ -465,15 +466,11 @@ ranked <- df |>
 
 ```{r}
 gsea_all <- GSEA(ranked, TERM2GENE = hallmark, TERM2NAME = hallmark_terms, seed = TRUE)
-df_all <- as.data.frame(gsea_all)
-```
-
-```{r}
-time_coefs <- resultsNames(dds) |>
-  stringr::str_subset("^time")
 
 gsea_results <- list()
-for (coef in time_coefs) {
+coefs <- resultsNames(dds)
+
+for (coef in coefs[-1]) {
   ranked_genes <- df |>
     filter(coefficient == coef,
            !is.na(human_gene_name)) |>
@@ -487,7 +484,8 @@ for (coef in time_coefs) {
     seed = TRUE)
 }
 
-
+df_all <- as.data.frame(gsea_all)
+df_subject <- as.data.frame(gsea_results[['subject_2_vs_1']])
 df_3 <- as.data.frame(gsea_results[['time_3_vs_0']])
 df_7 <- as.data.frame(gsea_results[['time_7_vs_0']])
 df_10 <- as.data.frame(gsea_results[['time_10_vs_0']])
@@ -496,25 +494,12 @@ df_49 <- as.data.frame(gsea_results[['time_49_vs_0']])
 ```
 
 ```{r eval = FALSE}
-
-
-enrichplot::gseaplot2(ehall, geneSetID = c(1, 2, 3))
-```
-
-```{r eval = FALSE}
+# enrichplot::gseaplot2(ehall, geneSetID = c(1, 2, 3))
 # GSEA_GO <- gseGO(geneList = all,
 #                   ont = "BP",
 #                   OrgDb = org.Hs.eg.db,
 #                   keyType = "ENSEMBL",
 #                   seed = TRUE)
-
-
-
-
-result_df <- as.data.frame(ehall)
-
-
-write.csv(result_df, "result.csv")
 ```
 
 ```{r}

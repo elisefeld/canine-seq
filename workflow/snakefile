@@ -16,7 +16,7 @@ RELEASE = config['run']['ref_release']
 DATA_DIR = os.path.join(config['path']['raw_data_dir'], PROJECT) 
 RESULTS_DIR = os.path.join(config['path']['results_dir'], PROJECT)
 REPORT_DIR = os.path.join(config['path']['report_dir'], PROJECT)
-REF_DIR = os.path.join(config['path']['reference_dir'], SPECIES, f'release-{RELEASE}_BUILD')
+REF_DIR = os.path.join(config['path']['reference_dir'], f'{SPECIES}_{BUILD}_{RELEASE}')
 dirs = [DATA_DIR, RESULTS_DIR, REPORT_DIR, REF_DIR]
 for dir in dirs:
     os.makedirs(dir,exist_ok=True)
@@ -71,36 +71,9 @@ rule all:
         expand(f'{RESULTS_DIR}/qc/fastqc/{{sample}}_R2_fastqc.html', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/qc/fastp/{{sample}}.json', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES), #*
-        f'{REPORT_DIR}/multiqc_report.html' #*
-        
-###########################
-###### DATA DOWNLOAD ######
-###########################
-rule get_cdna:
-    output: 
-        f'{REF_DIR}/{SPECIES}.{BUILD}.cdna.all.fa.gz'
-    shell:
-        '''
-        wget -P {REF_DIR} 'http://ftp.ensembl.org/pub/release-{RELEASE}/fasta/{SPECIES}/cdna/{SPECIES}.{BUILD}.cdna.all.fa.gz'
-        '''
+        expand(f'{RESULTS_DIR}/hisat2/{{sample}}.bam', sample=SAMPLES)
+        #f'{REPORT_DIR}/multiqc_report.html', #*
 
-rule get_genome:
-    output: 
-        f'{REF_DIR}/{SPECIES}.{BUILD}.dna.toplevel.fa.gz'
-        f'{REF_DIR}/{SPECIES}.{BUILD}.dna.toplevel.fa.gz.fai'
-    shell:
-        '''
-        wget -P {REF_DIR} 'http://ftp.ensembl.org/pub/release-{RELEASE}/fasta/{SPECIES}/dna_index/{SPECIES}.{BUILD}.dna.toplevel.fa.gz'
-        wget -P {REF_DIR}'http://ftp.ensembl.org/pub/release-{RELEASE}/fasta/{SPECIES}/dna_index/{SPECIES}.{BUILD}.dna.toplevel.fa.gz.fai'
-        '''
-
-rule get_annotation:
-    output: 
-        f'{REF_DIR}/{SPECIES}.{BUILD}.{RELEASE}.gtf.gz'
-    shell:
-        '''
-        wget -P {REF_DIR} 'http://ftp.ensembl.org/pub/release-{RELEASE}/gtf/{SPECIES}/{SPECIES}.{BUILD}.{RELEASE}.gtf.gz'
-        '''
 
 rule kallisto_index:
     input: 
@@ -115,6 +88,30 @@ rule kallisto_index:
         '''
         echo 'Building kallisto index for {input.fasta}...'
         kallisto index -i {output.idx} {input.fasta} -t {threads} &> {log}
+        '''
+
+rule hisat2_index:
+    input: 
+        fasta=f'{REF_DIR}/{SPECIES}.{BUILD}.cdna.all.fa.gz'
+    output: 
+        multiext(
+            f"{REF_DIR}/{SPECIES}.{BUILD}",
+            ".1.ht2",
+            ".2.ht2",
+            ".3.ht2",
+            ".4.ht2",
+            ".5.ht2",
+            ".6.ht2",
+            ".7.ht2",
+            ".8.ht2")
+    threads:
+        config['hisat2']['threads']
+    log:
+        f'{RESULTS_DIR}/logs/hisat2/hisat2index.log'
+    shell:
+        '''
+        echo 'Building hisat2 index for {input.fasta}...'
+        hisat2-build  --threads {threads} {input.fasta} &> {log}
         '''
 
 ###########################
@@ -186,8 +183,8 @@ rule fastp:
         read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
         read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        trimmed_read1=temp(f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz'),
-        trimmed_read2=temp(f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz'),
+        trimmed_read1=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_read2=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz',
         html=f'{RESULTS_DIR}/qc/fastp/{{sample}}.html',
         json=f'{RESULTS_DIR}/qc/fastp/{{sample}}.json'
     threads:
@@ -225,6 +222,32 @@ rule kallisto_quant:
         echo 'Running kallisto pseudoalignment for {input.trimmed_read1} and {input.trimmed_read2}'
         kallisto quant -i {input.idx} -o {params.out_dir} -t {threads} {input.trimmed_read1} {input.trimmed_read2} &> {log}
         '''
+rule hisat2_align:
+    input:
+        multiext(
+            f"{REF_DIR}/{SPECIES}.{BUILD}",
+            ".1.ht2",
+            ".2.ht2",
+            ".3.ht2",
+            ".4.ht2",
+            ".5.ht2",
+            ".6.ht2",
+            ".7.ht2",
+            ".8.ht2"),
+        trimmed_read1=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_read2=f'{RESULTS_DIR}/qc/fastp/{{sample}}_R2_trimmed.fastq.gz',
+    threads:
+        config['hisat2']['threads']
+    output:
+        bam = f'{RESULTS_DIR}/hisat2/{{sample}}.bam'
+    log:
+        f'{RESULTS_DIR}/logs/hisat2/{{sample}}_hisat2align.log'
+    shell:
+        '''
+        echo 'Running HISAT2 alignment for {input.trimmed_read1} and {input.trimmed_read2}'
+        hisat2 -x genome --threads {threads} -1 {input.trimmed_read1} -2 {input.trimmed_read2} -S {output.bam} &> {log}
+        '''
+
 
 ###########################
 ######### REPORT ##########

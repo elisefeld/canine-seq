@@ -18,16 +18,15 @@ run:
   sample_sheet: "sample_sheet.csv"
   ref_species: "Canis_lupus_familiarisgsd"
   ref_build: "UU_Cfam_GSD_1.0"
-  ref_release: 116
+  ref_release: "Custom"
   run_by: Elise Hachfeld
 
 path: # Do NOT change these unless you are confident in directory structure and file locations.
-  raw_data_dir: "data"
+  data_dir: "data"
   reference_dir: "reference"
   results_dir: "results"
   report_dir: "report"
   log_dir: "logs"
-
 
 threads:
   samtools: 8

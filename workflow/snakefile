@@ -276,10 +276,12 @@ rule hisat2_align:
         sam=temp(f'{RESULTS_DIR}/hisat2/{{sample}}.sam')
     log:
         f'{LOGS_DIR}/hisat2/{{sample}}_align.log'
+    params:
+        index_base=f"{REF_DIR}/{SPECIES}.{BUILD}"
     shell:
         '''
         echo 'Running HISAT2 alignment for {input.trimmed_read1} and {input.trimmed_read2}'
-        hisat2 -x genome \
+        hisat2 -x {params.index_base} \
         --threads {threads} \
         -1 {input.trimmed_read1} \
         -2 {input.trimmed_read2} \

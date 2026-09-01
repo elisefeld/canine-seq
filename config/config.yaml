@@ -23,6 +23,8 @@ run:
 
 ref: 
   fasta: "genome.fa"
+  cdna: ""
+  gtf: "genes.gtf"
 
 path: # Do NOT change these unless you are confident in directory structure and file locations.
   run_dir: "runs"

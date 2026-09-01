@@ -11,7 +11,9 @@ PROJECT = config['project']['name']
 SPECIES = config['run']['ref_species']
 BUILD = config['run']['ref_build']
 RELEASE = config['run']['ref_release']
+
 FASTA = config['ref']['fasta']
+GTF = config['ref']['gtf']
 
 # Directory declaration and creation
 DATA_DIR = os.path.join(config['path']['data_dir'], PROJECT) 
@@ -76,9 +78,9 @@ rule all:
         expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.html', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.html', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastp/{{sample}}.json', sample=SAMPLES),
-        expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES), #*
+        #expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES), #*
         expand(f'{RESULTS_DIR}/bam/{{sample}}.bam', sample=SAMPLES),
-        f'{REPORT_DIR}/multiqc_report.html', #*
+        #f'{REPORT_DIR}/multiqc_report.html', #*
 
 ###########################
 ##### QUALITY CONTROL #####
@@ -221,10 +223,12 @@ rule hisat2_index:
         config['threads']['hisat2']
     log:
         f'{LOGS_DIR}/hisat2/index.log'
+    params:
+        index_base=f"{REF_DIR}/{SPECIES}.{BUILD}"
     shell:
         '''
         echo 'Building hisat2 index for {input.fasta}...'
-        hisat2-build  --threads {threads} {input.fasta} f'{REF_DIR}/{SPECIES}.{BUILD}' &> {log}
+        hisat2-build  --threads {threads} {input.fasta} {params.index_base} &> {log}
         '''
 
 ###########################
@@ -283,6 +287,20 @@ rule hisat2_align:
         &> {log}
         '''
 
+#rule feature_counts:
+#    input:
+#        bam=f'{RESULTS_DIR}/bam/{{sample}}.bam'
+#    output:
+#        counts=f'{RESULTS_DIR}/feature_counts/{{sample}}_counts.txt'
+#   threads:
+#        config['threads']['featurecounts']
+#    log:
+#        f'{LOGS_DIR}/featurecounts/{{sample}}_featurecounts.log'
+#    shell:
+#        '''
+#        echo 'Running featureCounts for {input.bam}...'
+#        featureCounts -p -t exon -g gene_id -a {GTF} -o {output.counts} -T {threads} {input.bam} &> {log}
+#        '''
 ###########################
 ######### REPORT ##########
 ###########################
@@ -293,8 +311,8 @@ rule multiqc:
         expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.zip', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.zip', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastp/{{sample}}.json', sample = SAMPLES),
-        expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES),
-        expand(f'{LOGS_DIR}/kallisto/{{sample}}_quant.log', sample=SAMPLES),
+        #expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES),
+        #expand(f'{LOGS_DIR}/kallisto/{{sample}}_quant.log', sample=SAMPLES),
     output:
         html=f'{REPORT_DIR}/multiqc_report.html'
     log: 

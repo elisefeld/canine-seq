@@ -246,6 +246,39 @@ extract_coefs <- function(dds,
 }
 ```
 
+### run_gsea
+
+Description:\
+**Input:**\
+**Output:**
+
+```{r}
+run_gsea <- function(dds, main_df, path_data, path_terms){
+  df_list <- list()
+  coefs <- resultsNames(dds)
+  
+  for (coef in coefs[-1]) {
+    # create ranked list of genes
+    ranked_genes <- main_df |>
+      filter(coefficient == coef & !is.na(human_gene_name)) |>
+      arrange(desc(log2FoldChange)) |>
+      pull(log2FoldChange, name = human_gene_id)
+  
+    df_gsea <- GSEA(ranked_genes,
+                  TERM2GENE = hallmark,
+                  TERM2NAME = hallmark_terms,
+                  seed = TRUE) |>
+  as.data.frame() |>
+  mutate(coefficient = coef)
+
+  df_list <- append(df_list, list(df_gsea))
+  }
+  df_gsea <- do.call(rbind, df_list)
+}
+  
+```
+
+
 ## Set Constants
 
 ### Parameters
@@ -262,9 +295,9 @@ min_logfold <- 0.5
 ```{r}
 setwd("D:/canine-seq")
 sample_sheet_path <- "D:/canine-seq/data/ORBIT/sample_sheet.csv"
-gtf_path <- "D:/canine-seq/reference/dog/canfam4/Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.116.gtf.gz"
-kallisto_path <- "D:/canine-seq/results/ORBIT/kallisto"
-homolog_path <- "D:/canine-seq/data/ORBIT/Canis_lupus_familiaris-GCA_011100685.1-2021_03-homology.tsv"
+gtf_path <- "D:/canine-seq/data/reference/Canis_lupus_familiarisgsd_UU_Cfam_GSD_1.0_116/Canis_lupus_familiarisgsd.UU_Cfam_GSD_1.0.116.gtf.gz"
+kallisto_path <- "D:/canine-seq/runs/run_ORBIT_canfam4/results/kallisto"
+homolog_path <- "D:/canine-seq/data/reference/Canis_lupus_familiarisgsd_UU_Cfam_GSD_1.0_116/Canis_lupus_familiaris-GCA_011100685.1-2021_03-homology.tsv"
 ```
 
 ## Data Import
@@ -323,8 +356,13 @@ dds <- run_model(txi,
 
 df <- extract_coefs(dds, tx2gene, homologs, min_alpha = 1000000, min_logfold = 0) # unfiltered results
 
+df_filter_high_cutoff <- extract_coefs(dds, tx2gene, homologs, min_alpha = min_alpha, min_logfold = 1) |>
+  dplyr::filter(regulation != "nonDE" & coefficient != "subject_2_vs_1") # results filtered by alpha and log fold change
+
 df_filter <- extract_coefs(dds, tx2gene, homologs, min_alpha = min_alpha, min_logfold = min_logfold) |>
   dplyr::filter(regulation != "nonDE" & coefficient != "subject_2_vs_1") # results filtered by alpha and log fold change
+
+write.csv(df_filter, "diff_ex_genes.csv")
 ``` 
 
 ## Quality Control 
@@ -445,8 +483,12 @@ counts_norm |>
 
 ```
 
+```{r}
+```
+
 # Gene Set Enrichment
 ```{r}
+msigdbr_collections()
 # count how many human gene ids are NA
 
 # gather pathway dataset
@@ -457,49 +499,62 @@ head(hallmark)
 hallmark_terms <- msigdbr(species = "Homo sapiens", collection = "H") |>
   dplyr::select(gs_name, gs_description)
 
-# create ranked list of genes
-ranked <- df |>
-  filter(!is.na(human_gene_name)) |>
-  arrange(desc(log2FoldChange)) |>
-  pull(log2FoldChange, name = human_gene_id)
+immune <- msigdbr(species = "Homo sapiens", collection = "C7", subcollection = "IMMUNESIGDB") |>
+  dplyr::select(gs_name, ensembl_gene)
+
+immune_terms <- msigdbr(species = "Homo sapiens", collection = "C7", subcollection = "IMMUNESIGDB") |>
+  dplyr::select(gs_name, gs_description)
 ```
 
 ```{r}
-gsea_all <- GSEA(ranked, TERM2GENE = hallmark, TERM2NAME = hallmark_terms, seed = TRUE)
+df_hallmark <- run_gsea(dds, df, hallmark, hallmark_terms)
+df_immune <- run_gsea(dds, df, immune, immune_terms)
+```
 
-gsea_results <- list()
-coefs <- resultsNames(dds)
-
-for (coef in coefs[-1]) {
-  ranked_genes <- df |>
-    filter(coefficient == coef,
-           !is.na(human_gene_name)) |>
-    arrange(desc(log2FoldChange)) |>
-    pull(log2FoldChange, name = human_gene_id)
-
-  gsea_results[[coef]] <- GSEA(
-    ranked_genes,
-    TERM2GENE = hallmark,
-    TERM2NAME = hallmark_terms,
-    seed = TRUE)
-}
-
-df_all <- as.data.frame(gsea_all)
-df_subject <- as.data.frame(gsea_results[['subject_2_vs_1']])
-df_3 <- as.data.frame(gsea_results[['time_3_vs_0']])
-df_7 <- as.data.frame(gsea_results[['time_7_vs_0']])
-df_10 <- as.data.frame(gsea_results[['time_10_vs_0']])
-df_28 <- as.data.frame(gsea_results[['time_28_vs_0']])
-df_49 <- as.data.frame(gsea_results[['time_49_vs_0']])
+```{r} 
+df_hallmark |>
+  mutate(pathway = str_sub(ID, 10),
+         regulation = case_when(
+    (NES > 0) ~ "upregulated",
+    (NES < 0) ~ "downregulated",
+    T ~ "nonDE")) |>
+  ggplot(aes(x=reorder(pathway, -NES), y=NES, group = regulation)) +
+  geom_bar(aes(fill = regulation), stat = "identity") +
+  facet_wrap(~coefficient, scales = 'free_x') +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle=45, hjust=1))
 ```
 
 ```{r eval = FALSE}
+plotCounts(dds, gene = 'ENSCAFG00805010402', intgroup = c('time'), main = 'CATSPERG')
+
+counts_norm |>
+  filter(gene_id == "ENSCAFG00805001673") |>
+   left_join(homologs, by = c("gene_id" = "dog_gene_id")) |>
+   dplyr::mutate(human_gene_name = coalesce(human_gene_name,
+                                           gene_id)) |>
+  ggplot(aes(x = time_num, y = count, shape = time, color = subject)) +
+  geom_point() +
+  theme_bw() +
+  labs(
+    x = "Time (days)",
+    y = "Normalized count",
+    title = "Expression")
+
+
 # enrichplot::gseaplot2(ehall, geneSetID = c(1, 2, 3))
 # GSEA_GO <- gseGO(geneList = all,
 #                   ont = "BP",
 #                   OrgDb = org.Hs.eg.db,
 #                   keyType = "ENSEMBL",
 #                   seed = TRUE)
+
+comma_separated <- df_filter |>
+  distinct(human_gene_name) |>
+  pull(human_gene_name) |>
+  paste(collapse = ", ")
+
+print(comma_separated)
 ```
 
 ```{r}

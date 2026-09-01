@@ -254,6 +254,7 @@ Description:\
 
 ```{r}
 run_gsea <- function(dds, main_df, path_data, path_terms){
+  set.seed(42)
   df_list <- list()
   coefs <- resultsNames(dds)
   
@@ -265,8 +266,8 @@ run_gsea <- function(dds, main_df, path_data, path_terms){
       pull(log2FoldChange, name = human_gene_id)
   
     df_gsea <- GSEA(ranked_genes,
-                  TERM2GENE = hallmark,
-                  TERM2NAME = hallmark_terms,
+                  TERM2GENE = path_data,
+                  TERM2NAME = path_terms,
                   seed = TRUE) |>
   as.data.frame() |>
   mutate(coefficient = coef)
@@ -274,6 +275,7 @@ run_gsea <- function(dds, main_df, path_data, path_terms){
   df_list <- append(df_list, list(df_gsea))
   }
   df_gsea <- do.call(rbind, df_list)
+  return(df_gsea)
 }
   
 ```
@@ -445,7 +447,7 @@ df |>
 ```{r}
 up <- df_filter |>
   filter(regulation == "upregulated") |>
-  pull(gene_id) 
+  pull(gene_id, coefficient) 
   
 down <- df_filter |>
   filter(regulation == "downregulated") |>
@@ -484,6 +486,42 @@ counts_norm |>
 ```
 
 ```{r}
+up3 <- df_filter |>
+  filter(regulation == "upregulated" & coefficient == "time_3_vs_0") |>
+  pull(gene_id) 
+
+counts_norm |>
+  filter(gene_id %in% up3) |>
+   left_join(homologs, by = c("gene_id" = "dog_gene_id")) |>
+   dplyr::mutate(human_gene_name = coalesce(human_gene_name,
+                                           gene_id)) |>
+  ggplot(aes(x = time_num, y = count, shape = time, color = subject)) +
+  geom_point() +
+  #geom_smooth(method = "loess", se = FALSE) +
+  theme_bw() +
+  facet_wrap(~human_gene_name, scales = "free") +
+  labs(
+    x = "Time (days)",
+    y = "Normalized count",
+    title = "Upregulated Genes")
+```
+
+```{r}
+plot_list <- df_filter |>
+  group_split(regulation, coefficient) |>
+  map(function(df_sub) {
+    gene_ids <- df_sub$gene_id
+    counts_norm |>
+      filter(gene_id %in% gene_ids) |>
+      left_join(homologs, by = c("gene_id" = "dog_gene_id")) |>
+      mutate(human_gene_name = coalesce(human_gene_name, gene_id)) |>
+      ggplot(aes(x = time_num, y = count, shape = time, color = subject)) +
+      geom_point() +
+      theme_bw() +
+      facet_wrap(~human_gene_name, scales = "free") +
+      labs(title = paste(
+          unique(df_sub$regulation),
+          unique(df_sub$coefficient)))})
 ```
 
 # Gene Set Enrichment
@@ -504,11 +542,26 @@ immune <- msigdbr(species = "Homo sapiens", collection = "C7", subcollection = "
 
 immune_terms <- msigdbr(species = "Homo sapiens", collection = "C7", subcollection = "IMMUNESIGDB") |>
   dplyr::select(gs_name, gs_description)
+
+react <- msigdbr(species = "Homo sapiens", collection = "C2", subcollection = "CP:REACTOME") |>
+  dplyr::select(gs_name, ensembl_gene)
+
+react_terms <- msigdbr(species = "Homo sapiens", collection = "C2", subcollection = "CP:REACTOME") |>
+  dplyr::select(gs_name, gs_description)
+
+gobp <- msigdbr(species = "Homo sapiens", collection = "C5", subcollection = "GO:BP") |>
+  dplyr::select(gs_name, ensembl_gene)
+
+gobp_terms <- msigdbr(species = "Homo sapiens", collection = "C5", subcollection = "GO:BP") |>
+  dplyr::select(gs_name, gs_description)
+
 ```
 
 ```{r}
 df_hallmark <- run_gsea(dds, df, hallmark, hallmark_terms)
 df_immune <- run_gsea(dds, df, immune, immune_terms)
+df_react <- run_gsea(dds, df, react, react_terms)
+df_gobp <- run_gsea(dds, df, gobp, gobp_terms)
 ```
 
 ```{r} 

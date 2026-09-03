@@ -2,13 +2,14 @@ prep_samples <- function(sample_sheet_path) {
   if (file.exists(sample_sheet_path)) {
     message("Reading sample sheet from ", sample_sheet_path, "...")
     sample_sheet <- read.csv(sample_sheet_path) |>
-      dplyr::mutate(time = factor(time, levels = sort(unique(time))),
+      dplyr::mutate(time_num = as.numeric(time),
+                    time = factor(time, levels = sort(unique(time))),
                     time_lab = factor(paste0("Day ", time)),
                     subject = factor(subject, levels = sort(unique(subject))),
                     subject_lab = factor(paste0("Subject ", subject)),
                     sample_name = paste0("Subject ", subject, ", ", "Day ", time)) # readable sample name for visualizations
     rownames(sample_sheet) <- sample_sheet$sample_id
-    print(paste0("Found ", nrow(sample_sheet), " samples in sample sheet."))
+    message("Found ", nrow(sample_sheet), " samples in sample sheet.")
     return(sample_sheet)
   }
   else {
@@ -42,10 +43,10 @@ prep_kallisto <- function(kallisto_path,
                           sample_sheet,
                           transcripts = FALSE) {
   # NOTE: this will not include samples in the file path if they are not in the sample sheet
-  print(paste0("Reading abundance.h5 files from ", kallisto_path, "..."))
+  message("Reading abundance.h5 files from ", kallisto_path, "...")
   files <- file.path(kallisto_path, sample_sheet$sample_id, "abundance.h5") 
   if (length(files) > 0){
-    print(paste0("Found ", length(files), " files in ", kallisto_path))
+    message("Found ", length(files), " files in ", kallisto_path)
     names(files) <- sample_sheet$sample_id
     txi <- tximport(files,
                     type = "kallisto",
@@ -61,7 +62,7 @@ prep_kallisto <- function(kallisto_path,
 
 prep_homologs <- function(homolog_path) {
   if (file.exists(homolog_path)) {
-    print(paste0("Reading csv from ", homolog_path, "..."))
+    message("Reading csv from ", homolog_path, "...")
     homologs <- read.csv(homolog_path, sep = "\t") |>
       dplyr::filter(ref_species == "homo_sapiens") |>
       dplyr::select(ref_gene_stable_id,
@@ -74,7 +75,7 @@ prep_homologs <- function(homolog_path) {
                     dog_gene_name = query_gene_name) |>
       group_by(dog_gene_id) |>
       summarise(across(everything(), ~paste0(unique(.), collapse = ", ")))
-    print(paste0("Found ", length(unique(homologs$human_gene_id)), " homologous genes in humans."))
+    message("Found ", length(unique(homologs$human_gene_id)), " homologous genes in humans.")
     return(homologs)
   }
   else {
@@ -92,6 +93,7 @@ run_model <- function(txi = txi,
   dds <- DESeqDataSetFromTximport(txi,
                                   colData = sample_sheet,
                                   design = design)
+  message("Filtering out genes that don't have a count above ", min_count, " in more than", min_samples, " samples")
   keep <- rowSums(counts(dds) >= min_count) >= min_samples # filtering for low counts
   dds <- dds[keep, ]
   
@@ -133,6 +135,7 @@ extract_coefs <- function(dds,
   coefficients <- resultsNames(dds)
   df_list <- list()
   for (coef in coefficients[-1]) {
+    message("Shrinking log2FoldChange values for coefficient: ", coef)
     res <- lfcShrink(dds, coef = coef, type = "apeglm") |>
       as.data.frame() |>
       rownames_to_column("gene_id") |>

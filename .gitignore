@@ -9,3 +9,4 @@ internal_notes.md
 *.Rdata
 *.Rhistory
 *.pyc
+*.png

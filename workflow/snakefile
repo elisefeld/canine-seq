@@ -205,7 +205,8 @@ rule sort_bam:
     shell:
         '''
         echo 'Sorting {input.sam}...'
-        samtools sort {input.sam} \
+        samtools sort -n \
+        {input.sam} \
         -o {output.sorted_bam} \
         &> {log}
         '''
@@ -340,8 +341,9 @@ rule hisat2_align:
 rule feature_counts:
     input:
         bam=f'{RESULTS_DIR}/bam/{{sample}}.bam'
+        gtf=f'{REF_DIR}/{GTF}'
     output:
-        counts=f'{RESULTS_DIR}/feature_counts/{{sample}}_counts.txt'
+        counts=f'{RESULTS_DIR}/featurecounts/{{sample}}_counts.txt'
    threads:
         config['threads']['featurecounts']
     log:
@@ -351,7 +353,7 @@ rule feature_counts:
         echo 'Running featureCounts for {input.bam}...'
         featureCounts -p \
         -g gene_id \
-        -a {GTF} \
+        -a {input.gtf} \
         -o {output.counts} \
         -T {threads} \
         {input.bam} \

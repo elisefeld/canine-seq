@@ -41,3 +41,4 @@ threads:
   fastp: 8
   kallisto: 8
   hisat2: 8
+  featurecounts: 4

@@ -73,7 +73,7 @@ print(f'Running analysis of {len(SAMPLES)} RNA-seq samples for {PROJECT} project
 # Declaring desired outputs for the pipeline
 rule all:
     input: 
-        report=f'{REPORT_DIR}/multiqc_report.html', #*
+        report=f'{REPORT_DIR}/multiqc_report.html'
 
 ###########################
 ##### QUALITY CONTROL #####
@@ -248,7 +248,7 @@ rule hisat2_index:
         fasta=f'{REF_DIR}/{FASTA}'
     output: 
         multiext(
-            f'{REF_DIR}/{SPECIES}.{BUILD}',
+            f'{REF_DIR}/{FASTA}',
             '.1.ht2',
             '.2.ht2',
             '.3.ht2',
@@ -260,7 +260,7 @@ rule hisat2_index:
     threads:
         config['threads']['hisat2']
     params:
-        index_base=f"{REF_DIR}/{SPECIES}.{BUILD}"
+        index_base=f'{REF_DIR}/{FASTA}'
     log:
         f'{LOGS_DIR}/hisat2/index.log'
     shell:
@@ -275,7 +275,7 @@ rule hisat2_index:
 rule hisat2_align:
     input:
         multiext(
-            f'{REF_DIR}/{SPECIES}.{BUILD}',
+            f'{REF_DIR}/{FASTA}',
             '.1.ht2',
             '.2.ht2',
             '.3.ht2',
@@ -293,7 +293,7 @@ rule hisat2_align:
     log:
         f'{LOGS_DIR}/hisat2/{{sample}}_align.log'
     params:
-        index_base=f"{REF_DIR}/{SPECIES}.{BUILD}"
+        index_base=f'{REF_DIR}/{FASTA}'
     shell:
         '''
         echo 'Running HISAT2 alignment for {input.trimmed_read1} and {input.trimmed_read2}'

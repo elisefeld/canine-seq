@@ -141,10 +141,8 @@ rule fastqc:
         read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
         read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        html1=f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.html',
-        html2=f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.html',
-        zip1=f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.zip',
-        zip2=f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.zip'
+        R1=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc','.html','.zip'),
+        R2=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc','.html','.zip')
     threads:
         config['threads']['fastqc']
     log:
@@ -191,10 +189,8 @@ rule fastqc_trimmed:
         read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
         read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz'
     output:
-        html1=f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc_trimmed.html',
-        html2=f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc_trimmed.html',
-        zip1=f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc_trimmed.zip',
-        zip2=f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc_trimmed.zip'
+        R1=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc_trimmed','.html','.zip'),
+        R2=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc_trimmed','.html','.zip')
     threads:
         config['threads']['fastqc']
     log:
@@ -236,11 +232,9 @@ rule kallisto_quant:
         trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
         trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
     params:
-        out_dir=f'{RESULTS_DIR}/kallisto/{{sample}}',
-        sample='{sample}'
+        out_dir=f'{RESULTS_DIR}/kallisto/{{sample}}'
     output:
-        tsv=f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv',
-        h5=f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.h5',
+        multiext(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance','.tsv','.h5'),
         json=f'{RESULTS_DIR}/kallisto/{{sample}}/run_info.json'
     log: 
         f'{LOGS_DIR}/kallisto/{{sample}}_quant.log'

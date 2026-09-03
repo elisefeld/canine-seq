@@ -1,4 +1,12 @@
+import os
+
 configfile: 'config/config.yaml'
+
+REF_DIR = os.path.join(config['path']['data_dir'], config['path']['reference_dir'], f'{SPECIES}_{BUILD}_{RELEASE}')
+SPECIES = config['run']['ref_species']
+BUILD = config['run']['ref_build']
+RELEASE = config['run']['ref_release']
+
 rule get_cdna:
     output: 
         f'{REF_DIR}/{SPECIES}.{BUILD}.cdna.all.fa.gz'

@@ -77,6 +77,8 @@ rule all:
         expand(f'{RESULTS_DIR}/flagstat/{{sample}}_aligned.txt', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc.html', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc.html', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc_trimmed.html', sample=SAMPLES),
+        expand(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc_trimmed.html', sample=SAMPLES),
         expand(f'{RESULTS_DIR}/fastp/{{sample}}.json', sample=SAMPLES),
         #expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES), #*
         expand(f'{RESULTS_DIR}/hisat2/{{sample}}_sorted.bam.bai', sample=SAMPLES),
@@ -94,17 +96,6 @@ rule flagstat:
         '''
         echo 'Running samtools flagstat on {input.cram}...'
         samtools flagstat {input.cram} > {output.txt}
-        '''
-
-rule flagstat_aligned:
-    input: 
-        bam=f'{RESULTS_DIR}/bam/{{sample}}.bam'
-    output: 
-        txt=f'{RESULTS_DIR}/flagstat/{{sample}}_aligned.txt'
-    shell:
-        '''
-        echo 'Running samtools flagstat on {input.bam}...'
-        samtools flagstat {input.bam} > {output.txt}
         '''
 
 rule cram_sort:
@@ -125,7 +116,7 @@ rule cram_sort:
         &> {log}
         '''
 
-rule fastq:
+rule cram_to_fastq:
     input: 
         sorted_cram=f'{RESULTS_DIR}/sort/{{sample}}.cram',
     output:
@@ -168,7 +159,7 @@ rule fastqc:
          &> {log}
         '''
 
-rule fastp:
+rule fastp_trim:
     input:
         read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
         read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
@@ -194,39 +185,32 @@ rule fastp:
          -j {output.json} \
          &> {log}
         '''
-    
-rule sort_bam:
-    input:
-        sam=f'{RESULTS_DIR}/hisat2/{{sample}}.sam'
-    output:
-        sorted_bam=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam'
-    log:
-        f'{LOGS_DIR}/samtools/{{sample}}_sortbam.log'
-    shell:
-        '''
-        echo 'Sorting {input.sam}...'
-        samtools sort -n \
-        {input.sam} \
-        -o {output.sorted_bam} \
-        &> {log}
-        '''
 
-rule index_bam:
+rule fastqc_trimmed:
     input:
-        sorted_bam=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam'
+        read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz'
     output:
-        bai=f'{RESULTS_DIR}/hisat2/{{sample}}_sorted.bam.bai'
+        html1=f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc_trimmed.html',
+        html2=f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc_trimmed.html',
+        zip1=f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc_trimmed.zip',
+        zip2=f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc_trimmed.zip'
+    threads:
+        config['threads']['fastqc']
     log:
-        f'{LOGS_DIR}/samtools/{{sample}}_indexbam.log'
+        f'{LOGS_DIR}/fastqc/{{sample}}_fastqc.log'
     shell:
         '''
-        echo 'Creating index for {input.sorted_bam}...'
-        samtools index {input.sorted_bam} \
-        &> {log}
+        echo 'Running a quality control report for {input.read1} and {input.read2}...'
+        fastqc -o {RESULTS_DIR}/fastqc \
+         -t {threads} \
+         {input.read1} \
+         {input.read2} \
+         &> {log}
         '''
 
 ###########################
-###### FILE INDEXING ######
+##### PSEUDOALIGNMENT #####
 ###########################
 rule kallisto_index:
     input: 
@@ -246,6 +230,37 @@ rule kallisto_index:
          &> {log}
         '''
 
+rule kallisto_quant:
+    input:
+        idx=f'{REF_DIR}/{FASTA}.idx',
+        trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
+    params:
+        out_dir=f'{RESULTS_DIR}/kallisto/{{sample}}',
+        sample='{sample}'
+    output:
+        tsv=f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv',
+        h5=f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.h5',
+        json=f'{RESULTS_DIR}/kallisto/{{sample}}/run_info.json'
+    log: 
+        f'{LOGS_DIR}/kallisto/{{sample}}_quant.log'
+    threads:
+        config['threads']['kallisto']
+    shell:
+        '''
+        echo 'Running kallisto pseudoalignment for {input.trimmed_read1} and {input.trimmed_read2}'
+        kallisto quant -i {input.idx} \
+         -o {params.out_dir} \
+         -t {threads} \
+         {input.trimmed_read1} \
+         {input.trimmed_read2} \
+         &> {log}
+        '''
+
+
+###########################
+######## ALIGNMENT ########
+###########################
 rule hisat2_index:
     input: 
         fasta=f'{REF_DIR}/{FASTA}'
@@ -273,36 +288,6 @@ rule hisat2_index:
         {input.fasta} \
         {params.index_base} \
         &> {log}
-        '''
-
-###########################
-####### ALIGNMENT  ########
-###########################
-rule kallisto_quant:
-    input:
-        idx=f'{REF_DIR}/{FASTA}.idx',
-        trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
-    params:
-        out_dir=f'{RESULTS_DIR}/kallisto/{{sample}}',
-        sample='{sample}'
-    output:
-        tsv=f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv',
-        h5=f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.h5',
-        json=f'{RESULTS_DIR}/kallisto/{{sample}}/run_info.json'
-    log: 
-        f'{LOGS_DIR}/kallisto/{{sample}}_quant.log'
-    threads:
-        config['threads']['kallisto']
-    shell:
-        '''
-        echo 'Running kallisto pseudoalignment for {input.trimmed_read1} and {input.trimmed_read2}'
-        kallisto quant -i {input.idx} \
-         -o {params.out_dir} \
-         -t {threads} \
-         {input.trimmed_read1} \
-         {input.trimmed_read2} \
-         &> {log}
         '''
 
 rule hisat2_align:
@@ -338,9 +323,50 @@ rule hisat2_align:
         &> {log}
         '''
 
+rule sort_bam:
+    input:
+        sam=f'{RESULTS_DIR}/hisat2/{{sample}}.sam'
+    output:
+        sorted_bam=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam'
+    log:
+        f'{LOGS_DIR}/samtools/{{sample}}_sortbam.log'
+    shell:
+        '''
+        echo 'Sorting {input.sam} by name...'
+        samtools sort -n \
+        {input.sam} \
+        -o {output.sorted_bam} \
+        &> {log}
+        '''
+
+rule index_bam:
+    input:
+        sorted_bam=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam'
+    output:
+        bai=f'{RESULTS_DIR}/hisat2/{{sample}}_sorted.bam.bai'
+    log:
+        f'{LOGS_DIR}/samtools/{{sample}}_indexbam.log'
+    shell:
+        '''
+        echo 'Creating index for {input.sorted_bam}...'
+        samtools index {input.sorted_bam} \
+        &> {log}
+        '''
+
+rule flagstat_aligned:
+    input: 
+        sorted_bam=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam'
+    output: 
+        txt=f'{RESULTS_DIR}/flagstat/{{sample}}_aligned.txt'
+    shell:
+        '''
+        echo 'Running samtools flagstat on {input.sorted_bam}...'
+        samtools flagstat {input.sorted_bam} > {output.txt}
+        '''
+
 rule feature_counts:
     input:
-        bam=f'{RESULTS_DIR}/bam/{{sample}}.bam'
+        bam=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam'
         gtf=f'{REF_DIR}/{GTF}'
     output:
         counts=f'{RESULTS_DIR}/featurecounts/{{sample}}_counts.txt'

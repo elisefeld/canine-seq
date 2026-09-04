@@ -1,4 +1,5 @@
 import os
+import sys
 import errno
 import pandas as pd
 
@@ -28,14 +29,14 @@ LOGS_DIR = os.path.join(RUN_DIR, config['path']['log_dir'])
 dirs = [DATA_DIR, REF_DIR, RESULTS_DIR, REPORT_DIR, LOGS_DIR]
 for dir in dirs:
     os.makedirs(dir,exist_ok=True)
-    print(f'Project directory \'{dir}\' created successfully')
+    print(f'Project directory \'{dir}\' created successfully', file=sys.stderr)
 
 # File declaration and checks
 SAMPLE_SHEET = os.path.join(DATA_DIR, config['run']['sample_sheet'])
 if os.path.exists(SAMPLE_SHEET):
-    print(f'File \'{SAMPLE_SHEET}\' located successfully')
+    print(f'File \'{SAMPLE_SHEET}\' located successfully', file=sys.stderr)
 else:
-    raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file)
+    raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), SAMPLE_SHEET)
          
 # Identifying samples from sample sheet and data directory
 samples_df = pd.read_csv(SAMPLE_SHEET, sep = ',')
@@ -43,16 +44,16 @@ sample_sheet = samples_df['sample_id'].tolist()
 sample_data = glob_wildcards(f'{DATA_DIR}/{{sample}}.cram').sample
 
 if len(sample_sheet) > 0:
-    print(f'{len(sample_sheet)} samples found in sample sheet ({SAMPLE_SHEET}):')
+    print(f'{len(sample_sheet)} samples found in sample sheet ({SAMPLE_SHEET}):', file=sys.stderr)
     for sample in sample_sheet:
-        print(f'- {sample}')
+        print(f'- {sample}', file=sys.stderr)
 else:
     raise ValueError(f'No samples found in sample sheet ({SAMPLE_SHEET})')
 
 if len(sample_data) > 0:
-    print(f'{len(sample_data)} samples found in data directory ({DATA_DIR}):')
+    print(f'{len(sample_data)} samples found in data directory ({DATA_DIR}):', file=sys.stderr)
     for sample in sample_data:
-        print(f'- {sample}')
+        print(f'- {sample}', file=sys.stderr)
 else:
     raise ValueError('No samples found in sample sheet')
 
@@ -60,20 +61,21 @@ SAMPLES = (set(sample_sheet) & set(sample_data)) # samples present in both locat
 MISSING = sorted(set(sample_sheet) - set(sample_data)) # samples listed in sample sheet but missing from data directory
 
 if MISSING:
-    print(f'WARNING: {len(MISSING)} samples from the sample sheet ({SAMPLE_SHEET} were not found in data directory ({DATA_DIR}):')
+    print(f'WARNING: {len(MISSING)} samples from the sample sheet ({SAMPLE_SHEET} were not found in data directory ({DATA_DIR}):', file=sys.stderr)
     for sample in MISSING:
-        print(f'- {sample}')
+        print(f'- {sample}', file=sys.stderr)
 
-print(f'Found {len(SAMPLES)} valid samples:')
+print(f'Found {len(SAMPLES)} valid samples:', file=sys.stderr)
 for sample in SAMPLES:
-        print(f'- {sample}')
+        print(f'- {sample}', file=sys.stderr)
 
-print(f'Running analysis of {len(SAMPLES)} RNA-seq samples for {PROJECT} project. \nSpecies: {SPECIES} \nBuild: {BUILD} \nRelease: {RELEASE}')
+print(f'Running analysis of {len(SAMPLES)} RNA-seq samples for {PROJECT} project. \nSpecies: {SPECIES} \nBuild: {BUILD} \nRelease: {RELEASE}', file=sys.stderr)
 
 # Declaring desired outputs for the pipeline
 rule all:
     input: 
-        report=f'{REPORT_DIR}/multiqc_report.html'
+        report=f'{REPORT_DIR}/multiqc_report.html',
+        featurecounts=expand(f'{RESULTS_DIR}/featurecounts/{{sample}}_counts.txt', sample=SAMPLES)
 
 ###########################
 ##### QUALITY CONTROL #####
@@ -89,11 +91,11 @@ rule flagstat:
         samtools flagstat {input.cram} > {output.txt}
         '''
 
-rule cram_sort:
+rule sort_cram:
     input:
         cram=f'{DATA_DIR}/{{sample}}.cram'
     output:
-        sorted_cram=f'{RESULTS_DIR}/sort/{{sample}}.cram'
+        sorted_cram=temp(f'{RESULTS_DIR}/sort/{{sample}}.cram')
     threads:
         config['threads']['samtools']
     log:
@@ -182,7 +184,7 @@ rule fastqc_trimmed:
     threads:
         config['threads']['fastqc']
     log:
-        f'{LOGS_DIR}/fastqc/{{sample}}_fastqc.log'
+        f'{LOGS_DIR}/fastqc/{{sample}}_fastqc_trimmed.log'
     shell:
         '''
         echo 'Running a quality control report for {input.read1} and {input.read2}...'
@@ -289,7 +291,7 @@ rule hisat2_align:
     threads:
         config['threads']['hisat2']
     output:
-        sam=f'{RESULTS_DIR}/hisat2/{{sample}}.sam'
+        sam=temp(f'{RESULTS_DIR}/hisat2/{{sample}}.sam')
     log:
         f'{LOGS_DIR}/hisat2/{{sample}}_align.log'
     params:
@@ -325,7 +327,7 @@ rule index_bam:
     input:
         sorted_bam=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam'
     output:
-        bai=f'{RESULTS_DIR}/hisat2/{{sample}}_sorted.bam.bai'
+        bai=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam.bai'
     log:
         f'{LOGS_DIR}/samtools/{{sample}}_indexbam.log'
     shell:
@@ -349,7 +351,7 @@ rule flagstat_aligned:
 rule feature_counts:
     input:
         bam=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam',
-        bai=f'{RESULTS_DIR}/hisat2/{{sample}}_sorted.bam.bai',
+        bai=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam.bai',
         gtf=f'{REF_DIR}/{GTF}'
     output:
         counts=f'{RESULTS_DIR}/featurecounts/{{sample}}_counts.txt'

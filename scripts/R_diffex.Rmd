@@ -19,28 +19,18 @@ source("scripts/functions.R")
 
 # Overview
 
-add info here
+This report analyzes longitudinal bulk RNA sequencing data from lymph node fine-needle aspirate samples collected from dogs with lymphoma (n = 2) enrolled in the ORBIT study. Samples were obtained at baseline (day 0) and after treatment with Vesicular Stomatitis Virus (VSV) at 3, 7, 10, 28, and 49 days. Data were obtained from kallisto pseudoalignment against the CanFam4 (UU_Cfam_GSD_1.0) transcriptome. The goal of this analysis is to assess changes in gene expression over time after treatment with VSV.
 
 # Setup
 
-## Load Required Packages
+This section loads all required packages, defines parameters used for analysis, and imports the data sets used throughout the workflow. The packages tidyverse, stringr and kableExtra are used for data processing and visualization. The Bioconductor packages rtracklayer, tximport, DESeq2, Glimma, apeglm, msigdbr, and clusterProfiler are used for data import, differential expression analysis (DEA), and gene set enrichment analysis (GSEA). 
 
-```{r}
+```{r echo = FALSE, message = FALSE}
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
 }
 
-#BiocManager::install(c("tidyverse",
-#                       "stringr",
-#                       "kableExtra",
-#                       "rtracklayer",
-#                       "tximport",
-#                       "DESeq2",
-#                       "Glimma",
-#                       "apeglm",
-#                       "msigdbr",
-#                       "org.Hs.eg.db",
-#                       "clusterProfiler"))
+#BiocManager::install(c("tidyverse","stringr","kableExtra","rtracklayer","tximport","DESeq2","Glimma","apeglm","msigdbr","clusterProfiler"))
 
 library(tidyverse)
 library(stringr)
@@ -52,12 +42,13 @@ library(Glimma)
 library(apeglm)
 library(msigdbr)
 library(clusterProfiler)
-library(org.Hs.eg.db)
 ```
 
-## Set Constants
-
 ### Parameters
+
+- `min_samples and min_count`: In order to be included, genes must detected at a count greater than or equal to than min_count in at least min_samples. 
+- `min_alpha`: Adjusted p-value threshold used to define statistical significance.
+- `min_logfold`: Absolute log2 fold-change threshold used to define meaningful changes in gene expression.
 
 ```{r}
 min_samples <- 2
@@ -65,8 +56,6 @@ min_count <- 10
 min_alpha <- 0.05
 min_logfold <- 0.5
 ```
-
-### File Locations
 
 ```{r}
 sample_sheet_path <- "D:/canine-seq/data/ORBIT/sample_sheet.csv"
@@ -76,7 +65,7 @@ homolog_path <- "D:/canine-seq/data/reference/Canis_lupus_familiarisgsd_UU_Cfam_
 mayo_gene_counts <- "D:/mayo_results/merged_gene_counts.txt"
 ```
 
-## Data Import
+### Data Import
 
 ```{r}
 sample_sheet <- prep_samples(sample_sheet_path)
@@ -85,6 +74,11 @@ homologs <- prep_homologs(homolog_path)
 txi <- prep_kallisto(kallisto_path, tx2gene, sample_sheet)
 counts <- process_counts(txi$counts, sample_sheet, tx2gene)
 ```
+
+
+### Sample Overview
+
+The table below summarizes the samples included in this analysis, including subject identifiers, time, batch, and clinical information
 
 ```{r echo = FALSE}
 sample_sheet |>
@@ -96,61 +90,72 @@ sample_sheet |>
                     "Breed",
                     "Age",
                     "Cancer Type"),
-      row.names = FALSE,
-      caption = "Sample Overview") |>
+      row.names = FALSE) |>
   collapse_rows(columns = 1, valign = "top") |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
   scroll_box(width = "100%", height = "50%")
 ```
 
-```{r}
+### Workflow Validation
+
+To validate the workflow, gene-level abundance estimates were compared against independently generated kallisto results from the RapMap pipeline using reference (ROS_Cfam_1.0). Because the results were generated with different reference builds, genes were shared by matched gene names instead of Ensembl IDs. This introduces some amount of error given that gene names can differ between references. High correlations indicate strong agreement between pipelines and provide confidence in validity of the data. 
+
+```{r echo = FALSE}
 mayo_abd <- read.table(mayo_gene_counts, header = TRUE, sep = "\t") |>
-  dplyr::select("GeneID", "GeneName", "ORv.01__LN_FNA_Pre.TX_scaledTPM", "ORv.01__LN_FNA_Day_3_scaledTPM", "ORv.01__LN_FNA_Day_7_scaledTPM", "ORv.01__LN_FNA_Day_10_scaledTPM", "ORv.01__LN_FNA_Day_28_scaledTPM", "ORv.01__LN_FNA_Day_49_scaledTPM", "ORv.02__LN_FNA_Pre.TX_scaledTPM", "ORv.02__LN_FNA_Day_3_scaledTPM", "ORv.02__LN_FNA_Day_7_scaledTPM", "ORv.02__LN_FNA_Day_28_scaledTPM")|>
   filter(GeneName != "Unspecified") |>
   distinct(GeneName, .keep_all = TRUE) |>
-  arrange(GeneName)
+  select(GeneName, "ORv.01__LN_FNA_Pre.TX_scaledTPM", "ORv.01__LN_FNA_Day_3_scaledTPM", "ORv.01__LN_FNA_Day_7_scaledTPM", "ORv.01__LN_FNA_Day_10_scaledTPM", "ORv.01__LN_FNA_Day_28_scaledTPM", "ORv.01__LN_FNA_Day_49_scaledTPM", "ORv.02__LN_FNA_Pre.TX_scaledTPM", "ORv.02__LN_FNA_Day_3_scaledTPM", "ORv.02__LN_FNA_Day_7_scaledTPM", "ORv.02__LN_FNA_Day_28_scaledTPM")
+
 my_abd <- txi$counts |>
   as.data.frame() |>
   rownames_to_column("GeneID") |>
   left_join(tx2gene, by = c("GeneID" = "gene_id")) |>
-  distinct(GeneID, .keep_all = TRUE) |>
-  arrange(gene_name) |>
-  filter(gene_name %in% mayo_abd$GeneName) |>
-  dplyr::select(gene_name, starts_with("OR")) |>
   distinct(gene_name, .keep_all = TRUE) |>
+  select(gene_name, starts_with("OR")) |>
+  filter(gene_name %in% mayo_abd$GeneName) |>
   arrange(gene_name)
 
 mayo_abd <- mayo_abd |>
   filter(GeneName %in% my_abd$gene_name) |>
-  dplyr::select(-GeneID) |>
   arrange(GeneName)
 
-i = 2
-while (i < 12) {
-  print(cor(mayo_abd[i], my_abd[i]))
-  i = i+1
-}
+cor_tbl <- tibble(
+  mayo_sample = names(mayo_abd)[-1],
+  my_sample   = names(my_abd)[-1],
+  correlation = map2_dbl(mayo_abd[-1], my_abd[-1],
+    ~ cor(.x, .y, use = "complete.obs")))
+
+cor_tbl |>
+   kbl(col.names = c("Mayo Sample", "My Sample", "Correlation"),
+      row.names = FALSE) |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
+  scroll_box(width = "100%", height = "50%")
 ```
 
+### Raw Count Distribution
+
+The distribution of raw gene counts for each sample is visualized below. DESeq2 assumes that counts follow a negative binomial distribution. RNA-seq count data are typically right-skewed, with many genes exhibiting low or no expression and a smaller number of highly expressed genes. Samples should also have similar overall distributions. Major differences between samples may indicate issues with sequencing or sample quality.
+
 ```{r echo = FALSE}
+# fix the day labels to be in the correct order
 counts |>
   ggplot() +
   geom_histogram(aes(x = log2(count + 1)), position = "identity", bins = 200) +
-    facet_grid(rows = vars(subject_lab),
-             cols = vars(time_lab)) +
-  theme_bw() +
+    facet_grid(rows = vars(subject),
+             cols = vars(time), labeller = label_both) +
+  theme_classic() +
   labs(x = "log2(count + 1)",
-       y = "Number of Genes",
-       title = "Count Distribution by Sample")
+       y = "frequency")
 ```
-
-In order to fulfill the assumptions of the negative binomial model used by DESeq2, the distribution of counts should be approximately the same. Count data is expected to be right skewed.
 
 # Differential Expression
 
-## Model Fitting
+Differential expression analysis was performed to identify genes whose expression changed during treatment while accounting for baseline differences between individual dogs.
 
-This model uses the likelihood ratio test to model the change in gene expression over time, accounting for variation between subjects.
+### Model Fitting
+
+A likelihood ratio test (LRT) was used to evaluate whether gene expression varies across time points. 
+The full model `~ subject + time` includes both subject-specific effects and temporal effects. A reduced model containing only subject effects `~ subject` was compared against the full model. Genes with significant improvement in model fit after inclusion of the time term are considered temporally regulated.
 
 ```{r}
 dds <- run_model(txi,
@@ -160,18 +165,16 @@ dds <- run_model(txi,
                  test = "LRT",
                  min_count = min_count,
                  min_samples = min_samples)
-
-df <- extract_coefs(dds, tx2gene, homologs, min_alpha = 1000000, min_logfold = 0) # unfiltered results
-
-df_filter <- extract_coefs(dds, tx2gene, homologs, min_alpha = min_alpha, min_logfold = min_logfold) |>
-  dplyr::filter(regulation != "nonDE" & coefficient != "subject_2_vs_1") # results filtered by alpha and log fold change
-
-write.csv(df_filter, "diff_ex_genes.csv")
 ``` 
+
 
 ## Quality Control 
 
-```{r}
+### Counts per Sample
+
+Normalized counts generated by DESeq2 were compared with raw counts to determine the effectivenes of normalization and to identify differences in sequencing depth across samples. The table below summarizes count statistics before and after normalization.
+
+```{r echo = FALSE, message = FALSE}
 counts_norm <- counts(dds, normalized = TRUE)  
 counts_norm <- process_counts(counts_norm, sample_sheet, tx2gene)
 
@@ -194,42 +197,74 @@ counts_norm_tbl <- counts_norm |>
   dplyr::mutate(normalization = "no")
 ```
 
-```{r echo = FALSE}
+```{r echo = FALSE, message = FALSE}
 counts_tbl |>
   full_join(counts_norm_tbl) |>
   arrange(subject, time) |>
   kbl(col.names = c("Subject", "Time", "Total Count", "Mean Count", "Standard Deviation", "Max Count", "Number of Genes", "Normalized"),
       format.args = list(big.mark = ","),
-      row.names = FALSE,
-      caption = "Distribution of Gene Counts Across Samples") |>
+      row.names = FALSE) |>
   collapse_rows(columns = c(1,2), valign = "top") |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
   scroll_box(width = "100%", height = "50%")
 ```
 
-If there are large differences in the counts between samples, that could indicate problems with the sample or sequencing or uneven sequencing depth. Values are normalized using DESeq2. The normalized counts do NOT include genes that were removed during pre-filtering and DESeq2 internal filtering. 
-
-```{r}
-glimmaMDS(dds) # color by subject, shape by time.
-# 46% of variance explained by subject
-plotDispEsts(dds) # Black points should cluster around the fitted line.
+Similar distributions following normalization suggest that differences in sequencing depth have been corrected. The normalized gene counts are smaller because DESeq2 filters out genes with low counts. 
+```{r echo = FALSE}
+counts_norm |>
+  ggplot(aes(x = time, y = log2(count + 1), fill = subject)) +
+  geom_boxplot() +
+  theme_classic()
 ```
 
+### Multidimensional Scaling (MDS)
+
+A multidimensional scaling plot shows sample-to-sample relationships. Samples clustering by subject indicate differences in expression between dogs, while clustering by time point may suggest changes in expression because of the treatment. In this case, subject appears to explain 49% of variance.
+
 ```{r}
-# visualizing shrinkage of log fold change
+glimmaMDS(dds)
+```
+
+### Dispersion Estimation
+
+DESeq2 models the relationship between gene expression mean and variability using gene-wise dispersion estimates. The black points represent dispersion estimates for each gene. DESeq2 adjusts these estimates based on the fitted curve (red), resulting in shrunken dispersion estimates (blue). Systematic deviations of the dispersion estimates from the fitted curve may indicate outliers.
+
+```{R}
+plotDispEsts(dds)
+```
+
+### Log Fold-Change Shrinkage
+
+DESeq2 estimates log2 Fold-Change values for each gene to describe the effect size. However, these estimates can be inflated in genes with small counts. The apeglm shrinkage method reduces noise in fold-change estimates while preserving large biologically meaningful effects.
+
+```{r echo = FALSE}
 res <- results(dds)
-plotMA(res, alpha = 0.1, ylim = c(-2, 2), cex = 1.5, main = "MA-plot before LFC shrinkage")
+plotMA(res, alpha = 0.1, ylim = c(-2, 2), cex = 1.5, main = "MA-plot before LFC shrinkage (time_49_vs_0)")
 
 resLFC <- lfcShrink(dds, coef = "time_49_vs_0", type = "apeglm")
-plotMA(resLFC, alpha = 0.1, ylim = c(-2, 2), cex = 1.5, main = "MA-plot after LFC shrinkage")
+plotMA(resLFC, alpha = 0.1, ylim = c(-2, 2), cex = 1.5, main = "MA-plot after LFC shrinkage (time_49_vs_0)")
 ```
 
+```{r}
+df <- extract_coefs(dds, tx2gene, homologs, min_alpha = min_alpha, min_logfold = min_logfold, shrink)
+```
 
 ## Results
+
+Differential expression results are explored through interactive MA and volcano plots, which allow visualization of effect sizes and p-values. 
+
 ```{r}
+df_filter <- df |>
+  dplyr::filter(regulation != "nonDE",
+                coefficient != "subject_2_vs_1",
+                coefficient != "time_49_vs_0",
+                coefficient != "time_10_vs_0") # removing time 10 and 49 because there is only one subject for them
+
 glimmaMA(dds, groups = colData(dds)$time)
 glimmaVolcano(dds, groups = colData(dds)$time)
 ```
+
+The summary table below reports the number of significantly regulated genes identified for each model coefficient. Positive log2 fold changes represent increased expression relative to baseline and negative values indicate decreased expression. Results are filtered using both adjusted p-value and minimum fold-change thresholds.
 
 ```{r echo = FALSE}
 df |>
@@ -241,12 +276,10 @@ df |>
   arrange(desc(DE_genes)) |>
    kbl(col.names = c("Coefficient", "Number of DE Genes", "Upregulated", "Downregulated"),
       format.args = list(big.mark = ","),
-      row.names = FALSE,
-      caption = "Number of Differentially Expressed Genes by Coefficient") |>
+      row.names = FALSE) |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
   scroll_box(width = "100%", height = "50%")
 ```
-
 
 ```{r eval = FALSE}
 up <- df_filter |>
@@ -258,14 +291,16 @@ down <- df_filter |>
   pull(gene_id) 
 
 counts_norm |>
-  filter(gene_id %in% up) |>
+  filter(gene_id %in% up,
+         time != 49,
+         time != 10) |>
    left_join(homologs, by = c("gene_id" = "dog_gene_id")) |>
    dplyr::mutate(human_gene_name = coalesce(human_gene_name,
                                            gene_id)) |>
   ggplot(aes(x = time_num, y = count, shape = time, color = subject)) +
   geom_point() +
   #geom_smooth(method = "loess", se = FALSE) +
-  theme_bw() +
+  theme_classic() +
   facet_wrap(~human_gene_name, scales = "free") +
   labs(
     x = "Time (days)",
@@ -273,14 +308,16 @@ counts_norm |>
     title = "Upregulated Genes")
 
 counts_norm |>
-  filter(gene_id %in% down) |>
+    filter(gene_id %in% down,
+         time != 49,
+         time != 10) |>
    left_join(homologs, by = c("gene_id" = "dog_gene_id")) |>
    dplyr::mutate(human_gene_name = coalesce(human_gene_name,
                                            gene_id)) |>
   ggplot(aes(x = time_num, y = count, shape = time, color = subject)) +
   geom_point() +
   #geom_smooth(method = "loess", se = FALSE) +
-  theme_bw() +
+  theme_classic() +
   facet_wrap(~human_gene_name, scales = "free") +
   labs(
     x = "Time (days)",
@@ -301,7 +338,7 @@ counts_norm |>
   ggplot(aes(x = time_num, y = count, shape = time, color = subject)) +
   geom_point() +
   #geom_smooth(method = "loess", se = FALSE) +
-  theme_bw() +
+  theme_classic() +
   facet_wrap(~human_gene_name, scales = "free") +
   labs(
     x = "Time (days)",
@@ -309,7 +346,7 @@ counts_norm |>
     title = "Upregulated Genes")
 ```
 
-```{r}
+```{r eval = FALSE}
 # create table here of gene and coefficients where it is differentially expressed
 plot_list <- df_filter |>
   group_split(regulation, coefficient) |>
@@ -321,7 +358,7 @@ plot_list <- df_filter |>
       mutate(human_gene_name = coalesce(human_gene_name, gene_id)) |>
       ggplot(aes(x = time_num, y = count, shape = time, color = subject)) +
       geom_point() +
-      theme_bw() +
+      theme_classic() +
       facet_wrap(~human_gene_name, scales = "free") +
       labs(title = paste(
           unique(df_sub$regulation),
@@ -378,7 +415,7 @@ df_hallmark |>
   ggplot(aes(x=reorder(pathway, -NES), y=NES, group = regulation)) +
   geom_bar(aes(fill = regulation), stat = "identity") +
   facet_wrap(~coefficient, scales = 'free_x') +
-  theme_bw() +
+  theme_classic() +
   theme(axis.text.x = element_text(angle=45, hjust=1))
 ```
 
@@ -392,19 +429,11 @@ counts_norm |>
                                            gene_id)) |>
   ggplot(aes(x = time_num, y = count, shape = time, color = subject)) +
   geom_point() +
-  theme_bw() +
+  theme_classic() +
   labs(
     x = "Time (days)",
     y = "Normalized count",
     title = "Expression")
-
-
-# enrichplot::gseaplot2(ehall, geneSetID = c(1, 2, 3))
-# GSEA_GO <- gseGO(geneList = all,
-#                   ont = "BP",
-#                   OrgDb = org.Hs.eg.db,
-#                   keyType = "ENSEMBL",
-#                   seed = TRUE)
 
 comma_separated <- df_filter |>
   distinct(human_gene_name) |>
@@ -414,6 +443,9 @@ comma_separated <- df_filter |>
 print(comma_separated)
 ```
 
+
+# Session Information
 ```{r}
+write.csv(df_filter, "diff_ex_genes.csv")
 sessionInfo()
 ```

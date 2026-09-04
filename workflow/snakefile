@@ -93,7 +93,7 @@ rule cram_sort:
     input:
         cram=f'{DATA_DIR}/{{sample}}.cram'
     output:
-        sorted_cram=temp(f'{RESULTS_DIR}/sort/{{sample}}.cram')
+        sorted_cram=f'{RESULTS_DIR}/sort/{{sample}}.cram'
     threads:
         config['threads']['samtools']
     log:
@@ -111,8 +111,8 @@ rule cram_to_fastq:
     input: 
         sorted_cram=f'{RESULTS_DIR}/sort/{{sample}}.cram',
     output:
-        read1=temp(f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz'),
-        read2=temp(f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'),
+        read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz',
     threads: 
         config['threads']['fastq']
     log:
@@ -132,8 +132,8 @@ rule fastqc:
         read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
         read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc','.html','.zip'),
-        multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc','.html','.zip')
+        R1=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc','.html','.zip'),
+        R2=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc','.html','.zip')
     threads:
         config['threads']['fastqc']
     log:
@@ -155,7 +155,7 @@ rule fastp_trim:
     output:
         trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
         trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
-        multiext(f'{RESULTS_DIR}/fastp/{{sample}}','.html','.json')
+        fastp=multiext(f'{RESULTS_DIR}/fastp/{{sample}}','.html','.json')
     threads:
         config['threads']['fastp']
     log:
@@ -177,8 +177,8 @@ rule fastqc_trimmed:
         read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
         read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz'
     output:
-        multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc_trimmed','.html','.zip'),
-        multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc_trimmed','.html','.zip')
+        R1=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc_trimmed','.html','.zip'),
+        R2=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc_trimmed','.html','.zip')
     threads:
         config['threads']['fastqc']
     log:
@@ -220,7 +220,7 @@ rule kallisto_quant:
         trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
         trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
     output:
-        multiext(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance','.tsv','.h5'),
+        abundance=multiext(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance','.tsv','.h5'),
         json=f'{RESULTS_DIR}/kallisto/{{sample}}/run_info.json'
     params:
         out_dir=f'{RESULTS_DIR}/kallisto/{{sample}}'
@@ -348,12 +348,12 @@ rule flagstat_aligned:
 
 rule feature_counts:
     input:
-        bam=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam'
-        bai=f'{RESULTS_DIR}/hisat2/{{sample}}_sorted.bam.bai'
+        bam=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam',
+        bai=f'{RESULTS_DIR}/hisat2/{{sample}}_sorted.bam.bai',
         gtf=f'{REF_DIR}/{GTF}'
     output:
         counts=f'{RESULTS_DIR}/featurecounts/{{sample}}_counts.txt'
-   threads:
+    threads:
         config['threads']['featurecounts']
     log:
         f'{LOGS_DIR}/featurecounts/{{sample}}_featurecounts.log'
@@ -376,13 +376,13 @@ rule multiqc:
     input:
         flagstat=expand(f'{RESULTS_DIR}/flagstat/{{sample}}.txt', sample=SAMPLES),
         flagstat_aligned=expand(f'{RESULTS_DIR}/flagstat/{{sample}}_aligned.txt', sample=SAMPLES),
-        fastqc=expand(multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_{{read}}_fastqc','.html','.zip'), sample=SAMPLES, read=['R1','R2']),
-        fastqc_trimmed=expand(multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_{{read}}_fastqc_trimmed','.html','.zip'), sample=SAMPLES, read=['R1','R2']),
+        fastqc=expand(f'{RESULTS_DIR}/fastqc/{{sample}}_{{read}}_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
+        fastqc_trimmed=expand(f'{RESULTS_DIR}/fastqc/{{sample}}_{{read}}_fastqc_trimmed.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
         featurecounts=expand(f'{RESULTS_DIR}/featurecounts/{{sample}}_counts.txt', sample=SAMPLES)
         #kallisto=expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES)
     output:
         html=f'{REPORT_DIR}/multiqc_report.html'
-    log: 
+    log:
         f'{LOGS_DIR}/multiqc.log'
     shell:
         '''

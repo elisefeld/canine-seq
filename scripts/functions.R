@@ -4,9 +4,7 @@ prep_samples <- function(sample_sheet_path) {
     sample_sheet <- read.csv(sample_sheet_path) |>
       dplyr::mutate(time_num = as.numeric(time),
                     time = factor(time, levels = sort(unique(time))),
-                    time_lab = factor(paste0("Day ", time)),
                     subject = factor(subject, levels = sort(unique(subject))),
-                    subject_lab = factor(paste0("Subject ", subject)),
                     sample_name = paste0("Subject ", subject, ", ", "Day ", time)) # readable sample name for visualizations
     rownames(sample_sheet) <- sample_sheet$sample_id
     message("Found ", nrow(sample_sheet), " samples in sample sheet.")
@@ -93,7 +91,7 @@ run_model <- function(txi = txi,
   dds <- DESeqDataSetFromTximport(txi,
                                   colData = sample_sheet,
                                   design = design)
-  message("Filtering out genes that don't have a count above ", min_count, " in more than", min_samples, " samples")
+  message("Filtering out genes that don't have a count above ", min_count, " in more than ", min_samples, " samples")
   keep <- rowSums(counts(dds) >= min_count) >= min_samples # filtering for low counts
   dds <- dds[keep, ]
   
@@ -135,15 +133,15 @@ extract_coefs <- function(dds,
   coefficients <- resultsNames(dds)
   df_list <- list()
   for (coef in coefficients[-1]) {
-    message("Shrinking log2FoldChange values for coefficient: ", coef)
-    res <- lfcShrink(dds, coef = coef, type = "apeglm") |>
+      message("Shrinking log2FoldChange values for coefficient: ", coef)
+      res <- lfcShrink(dds, coef = coef, type = "apeglm") |>
       as.data.frame() |>
       rownames_to_column("gene_id") |>
       left_join(tx2gene,
                 by = "gene_id") |>
       dplyr::select(-transcript_id) |>
       dplyr::distinct(gene_id, .keep_all = TRUE) |>
-      dplyr::filter(!is.na(padj) & padj < min_alpha & abs(log2FoldChange) > min_logfold) |> # genes with extreme outliers are set to NA in DESeq2
+      dplyr::filter(!is.na(padj)) |> # genes with extreme outliers are set to NA in DESeq2
       dplyr::arrange(padj) |>
       dplyr::mutate(coefficient = coef)
     df_list <- append(df_list, list(res))

@@ -13,10 +13,6 @@ SPECIES = config['run']['ref_species']
 BUILD = config['run']['ref_build']
 RELEASE = config['run']['ref_release']
 
-FASTA = config['ref']['fasta']
-GTF = config['ref']['gtf']
-CDNA = config['ref']['cdna']
-
 # Directory declaration and creation
 DATA_DIR = os.path.join(config['path']['data_dir'], PROJECT) 
 REF_DIR = os.path.join(config['path']['data_dir'], config['path']['reference_dir'], f'{SPECIES}_{BUILD}_{RELEASE}')
@@ -27,9 +23,25 @@ REPORT_DIR = os.path.join(RUN_DIR, config['path']['report_dir'])
 LOGS_DIR = os.path.join(RUN_DIR, config['path']['log_dir'])
 
 dirs = [DATA_DIR, REF_DIR, RESULTS_DIR, REPORT_DIR, LOGS_DIR]
-for dir in dirs:
-    os.makedirs(dir,exist_ok=True)
-    print(f'Project directory \'{dir}\' created successfully', file=sys.stderr)
+for directory in dirs:
+    os.makedirs(directory,exist_ok=True)
+    print(f'Project directory \'{directory}\' created successfully', file=sys.stderr)
+
+FASTA = os.path.join(REF_DIR, config['ref']['fasta'])
+GTF   = os.path.join(REF_DIR, config['ref']['gtf'])
+CDNA  = os.path.join(REF_DIR, config['ref']['cdna'])
+CRAM = os.path.join(DATA_DIR, '{sample}.cram')
+
+FASTQ_R1 = os.path.join(RESULTS_DIR, 'fastq', '{sample}_R1.fastq.gz')
+FASTQ_R2 = os.path.join(RESULTS_DIR, 'fastq', '{sample}_R2.fastq.gz')
+
+TRIM_R1 = os.path.join(RESULTS_DIR, 'fastp', '{sample}_R1_trimmed.fastq.gz')
+TRIM_R2 = os.path.join(RESULTS_DIR, 'fastp', '{sample}_R2_trimmed.fastq.gz')
+
+SORTED_CRAM = os.path.join(RESULTS_DIR, 'sort', '{sample}.cram')
+SAM = os.path.join(RESULTS_DIR, 'hisat2', '{sample}.sam')
+SORTED_BAM = os.path.join(RESULTS_DIR, 'bam', '{sample}_sorted.bam')
+BAI = f'{SORTED_BAM}.bai'
 
 # File declaration and checks
 SAMPLE_SHEET = os.path.join(DATA_DIR, config['run']['sample_sheet'])
@@ -74,15 +86,14 @@ print(f'Running analysis of {len(SAMPLES)} RNA-seq samples for {PROJECT} project
 # Declaring desired outputs for the pipeline
 rule all:
     input: 
-        report=f'{REPORT_DIR}/multiqc_report.html',
-        featurecounts=expand(f'{RESULTS_DIR}/featurecounts/{{sample}}_counts.txt', sample=SAMPLES)
+        report=f'{REPORT_DIR}/multiqc_report.html'
 
 ###########################
 ##### QUALITY CONTROL #####
 ###########################
 rule flagstat:
     input: 
-        cram=f'{DATA_DIR}/{{sample}}.cram'
+        cram=CRAM
     output: 
         txt=f'{RESULTS_DIR}/flagstat/{{sample}}.txt'
     shell:
@@ -93,9 +104,9 @@ rule flagstat:
 
 rule sort_cram:
     input:
-        cram=f'{DATA_DIR}/{{sample}}.cram'
+        cram=CRAM
     output:
-        sorted_cram=temp(f'{RESULTS_DIR}/sort/{{sample}}.cram')
+        sorted_cram=temp(SORTED_CRAM)
     threads:
         config['threads']['samtools']
     log:
@@ -104,6 +115,7 @@ rule sort_cram:
         '''
         echo 'Sorting {input.cram} by name...'
         samtools sort -n \
+        -@ {threads} \
         -o {output.sorted_cram} \
         {input.cram} \
         &> {log}
@@ -111,18 +123,19 @@ rule sort_cram:
 
 rule cram_to_fastq:
     input: 
-        sorted_cram=f'{RESULTS_DIR}/sort/{{sample}}.cram',
+        sorted_cram=SORTED_CRAM,
     output:
-        read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
-        read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz',
+        read1=temp(FASTQ_R1),
+        read2=temp(FASTQ_R2)
     threads: 
-        config['threads']['fastq']
+        config['threads']['samtools']
     log:
         f'{LOGS_DIR}/fastq/{{sample}}_fastq.log'
     shell:
         '''
         echo 'Extracting FASTQ files from {input.sorted_cram}...'
-        samtools fastq -@ {threads} \
+        samtools fastq \
+        -@ {threads} \
         -1 {output.read1} \
         -2 {output.read2} \
         {input.sorted_cram} \
@@ -131,8 +144,8 @@ rule cram_to_fastq:
 
 rule fastqc:
     input:
-        read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
-        read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
+        read1=FASTQ_R1,
+        read2=FASTQ_R2
     output:
         R1=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc','.html','.zip'),
         R2=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc','.html','.zip')
@@ -152,11 +165,11 @@ rule fastqc:
 
 rule fastp_trim:
     input:
-        read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
-        read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
+        read1=FASTQ_R1,
+        read2=FASTQ_R2
     output:
-        trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
+        trimmed_read1=TRIM_R1,
+        trimmed_read2=TRIM_R2,
         fastp=multiext(f'{RESULTS_DIR}/fastp/{{sample}}','.html','.json')
     threads:
         config['threads']['fastp']
@@ -176,8 +189,8 @@ rule fastp_trim:
 
 rule fastqc_trimmed:
     input:
-        read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz'
+        read1=TRIM_R1,
+        read2=TRIM_R2
     output:
         R1=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc_trimmed','.html','.zip'),
         R2=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc_trimmed','.html','.zip')
@@ -200,27 +213,27 @@ rule fastqc_trimmed:
 ###########################
 rule kallisto_index:
     input: 
-        fasta=f'{REF_DIR}/{CDNA}'
+        cdna=CDNA
     output: 
-        idx=f'{REF_DIR}/{CDNA}.idx'
+        idx=f'{CDNA}.idx'
     threads:
         config['threads']['kallisto']
     log:
         f'{LOGS_DIR}/kallisto/index.log'
     shell:
         '''
-        echo 'Building kallisto index for {input.fasta}...'
+        echo 'Building kallisto index for {input.cdna}...'
         kallisto index -i {output.idx} \
-         {input.fasta} \
+         {input.cdna} \
          -t {threads} \
          &> {log}
         '''
 
 rule kallisto_quant:
     input:
-        idx=f'{REF_DIR}/{CDNA}.idx',
-        trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
+        idx=f'{CDNA}.idx',
+        trimmed_read1=TRIM_R1,
+        trimmed_read2=TRIM_R2,
     output:
         abundance=multiext(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance','.tsv','.h5'),
         json=f'{RESULTS_DIR}/kallisto/{{sample}}/run_info.json'
@@ -247,10 +260,10 @@ rule kallisto_quant:
 ###########################
 rule hisat2_index:
     input: 
-        fasta=f'{REF_DIR}/{FASTA}'
+        fasta=FASTA
     output: 
         multiext(
-            f'{REF_DIR}/{FASTA}',
+            FASTA,
             '.1.ht2',
             '.2.ht2',
             '.3.ht2',
@@ -262,7 +275,7 @@ rule hisat2_index:
     threads:
         config['threads']['hisat2']
     params:
-        index_base=f'{REF_DIR}/{FASTA}'
+        index_base=f'{FASTA}'
     log:
         f'{LOGS_DIR}/hisat2/index.log'
     shell:
@@ -277,7 +290,7 @@ rule hisat2_index:
 rule hisat2_align:
     input:
         multiext(
-            f'{REF_DIR}/{FASTA}',
+            FASTA,
             '.1.ht2',
             '.2.ht2',
             '.3.ht2',
@@ -286,16 +299,16 @@ rule hisat2_align:
             '.6.ht2',
             '.7.ht2',
             '.8.ht2'),
-        trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
+        trimmed_read1=TRIM_R1,
+        trimmed_read2=TRIM_R2,
     threads:
         config['threads']['hisat2']
     output:
-        sam=temp(f'{RESULTS_DIR}/hisat2/{{sample}}.sam')
+        sam=temp(SAM)
     log:
         f'{LOGS_DIR}/hisat2/{{sample}}_align.log'
     params:
-        index_base=f'{REF_DIR}/{FASTA}'
+        index_base=f'{FASTA}'
     shell:
         '''
         echo 'Running HISAT2 alignment for {input.trimmed_read1} and {input.trimmed_read2}'
@@ -309,15 +322,18 @@ rule hisat2_align:
 
 rule sort_bam:
     input:
-        sam=f'{RESULTS_DIR}/hisat2/{{sample}}.sam'
+        sam=SAM
     output:
-        sorted_bam=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam'
+        sorted_bam=SORTED_BAM
+    threads:
+        config['threads']['samtools']
     log:
         f'{LOGS_DIR}/samtools/{{sample}}_sortbam.log'
     shell:
         '''
         echo 'Sorting {input.sam} by name...'
         samtools sort -n \
+        -@ {threads} \
         {input.sam} \
         -o {output.sorted_bam} \
         &> {log}
@@ -325,21 +341,25 @@ rule sort_bam:
 
 rule index_bam:
     input:
-        sorted_bam=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam'
+        sorted_bam=SORTED_BAM
     output:
-        bai=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam.bai'
+        bai=BAI
+    threads:
+        config['threads']['samtools']
     log:
         f'{LOGS_DIR}/samtools/{{sample}}_indexbam.log'
     shell:
         '''
         echo 'Creating index for {input.sorted_bam}...'
-        samtools index {input.sorted_bam} \
+        samtools index \
+        -@ {threads} \
+        {input.sorted_bam} \
         &> {log}
         '''
 
 rule flagstat_aligned:
     input: 
-        sorted_bam=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam'
+        sorted_bam=SORTED_BAM
     output: 
         txt=f'{RESULTS_DIR}/flagstat/{{sample}}_aligned.txt'
     shell:
@@ -350,9 +370,9 @@ rule flagstat_aligned:
 
 rule feature_counts:
     input:
-        bam=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam',
-        bai=f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam.bai',
-        gtf=f'{REF_DIR}/{GTF}'
+        bam=SORTED_BAM,
+        bai=BAI,
+        gtf=GTF
     output:
         counts=f'{RESULTS_DIR}/featurecounts/{{sample}}_counts.txt'
     threads:

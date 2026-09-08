@@ -3,9 +3,8 @@ prep_samples <- function(sample_sheet_path) {
     message("Reading sample sheet from ", sample_sheet_path, "...")
     sample_sheet <- read.csv(sample_sheet_path) |>
       dplyr::mutate(time_num = as.numeric(time),
-                    time = factor(time, levels = sort(unique(time))),
-                    subject = factor(subject, levels = sort(unique(subject))),
-                    sample_name = paste0("Subject ", subject, ", ", "Day ", time)) # readable sample name for visualizations
+                    time = factor(time, levels = sort(unique(time_num))),
+                    subject = factor(subject, levels = sort(unique(subject))))
     rownames(sample_sheet) <- sample_sheet$sample_id
     message("Found ", nrow(sample_sheet), " samples in sample sheet.")
     return(sample_sheet)
@@ -43,8 +42,8 @@ prep_kallisto <- function(kallisto_path,
   # NOTE: this will not include samples in the file path if they are not in the sample sheet
   message("Reading abundance.h5 files from ", kallisto_path, "...")
   files <- file.path(kallisto_path, sample_sheet$sample_id, "abundance.h5") 
-  if (length(files) > 0){
-    message("Found ", length(files), " files in ", kallisto_path)
+  if (length(files[file.exists(files)]) > 0){
+    message("Found ", length(files[file.exists(files)]), " files in ", kallisto_path)
     names(files) <- sample_sheet$sample_id
     txi <- tximport(files,
                     type = "kallisto",
@@ -81,7 +80,7 @@ prep_homologs <- function(homolog_path) {
   }
 }
 
-run_model <- function(txi = txi,
+run_model <- function(txi,
                       sample_sheet,
                       design,
                       reduced,
@@ -91,7 +90,7 @@ run_model <- function(txi = txi,
   dds <- DESeqDataSetFromTximport(txi,
                                   colData = sample_sheet,
                                   design = design)
-  message("Filtering out genes that don't have a count above ", min_count, " in more than ", min_samples, " samples")
+  message("Filtering out genes that don't have a count above ", min_count, " in ", min_samples, " or more samples")
   keep <- rowSums(counts(dds) >= min_count) >= min_samples # filtering for low counts
   dds <- dds[keep, ]
   
@@ -128,13 +127,21 @@ extract_coefs <- function(dds,
                           tx2gene,
                           homologs,
                           min_alpha,
-                          min_logfold) {
+                          min_logfold,
+                          shrink=TRUE) {
   # getting a data frame that has log fold change, p val and gene name for every coefficient
   coefficients <- resultsNames(dds)
   df_list <- list()
   for (coef in coefficients[-1]) {
+      if (shrink == TRUE){
       message("Shrinking log2FoldChange values for coefficient: ", coef)
-      res <- lfcShrink(dds, coef = coef, type = "apeglm") |>
+      res <- lfcShrink(dds, coef = coef, type = "apeglm")
+      }
+      else{
+        res <- results(dds, name = coef)
+      }
+  
+      res <- res |>
       as.data.frame() |>
       rownames_to_column("gene_id") |>
       left_join(tx2gene,

@@ -13,9 +13,36 @@ This project automates the analysis of paired-end bulk RNA-seq data in unaligned
 - `MultiQC`: Aggregated quality control reports
 
 ---
+
+## Installation
+Clone the repository:
+
+```bash
+git clone https://github.com/elisefeld/canine-seq.git
+cd project
+```
+
+Detailed installation instructions are available in [install.md](docs/INSTALL.md).
+
+### Dependencies
+- Snakemake
+- Python ≥ 3.9
+- pandas
+- samtools
+- FastQC
+- fastp
+- HISAT2
+- kallisto
+- featureCounts (Subread)
+- MultiQC
+
+It is recommended to run this program inside a conda environment using a conda package manager and `config/env.yaml` .
+
+---
+
 ## Usage
 
-### Input Structure
+### Input
 
 Raw data and the sample sheet must be stored in a project-specific directory under `data/`. Reference files must be stored under a reference directory named using the species, build, and release values specified in `config.yaml`.
 
@@ -97,36 +124,6 @@ canine_seq/
 
 ---
 
-## Dependencies
-- Snakemake
-- Python ≥ 3.9
-- pandas
-- samtools
-- FastQC
-- fastp
-- HISAT2
-- kallisto
-- featureCounts (Subread)
-- MultiQC
-
-It is recommended to run this program inside a conda enviornment using a conda package manager and `config/env.yaml` .
-
-
-## Installation
-
-Clone the repository:
-
-```bash
-git clone https://github.com/elisefeld/canine-seq.git
-cd project
-```
-
-Detailed installation instructions are available in:
-
-```text
-INSTALL.md
-```
----
 ## Running the Workflow
 
 Perform a dry run:
@@ -146,8 +143,6 @@ Generate a workflow DAG:
 ```bash
 snakemake --dag | dot -Tpdf > dag.pdf
 ```
-
----
 
 ## Output
 
@@ -170,7 +165,7 @@ runs/<RUN_NAME>/
 
 ## License
 
-This project is distributed under the MIT license. See license.md for more details. 
+This project is distributed under the MIT license. See the [license](LICENSE) for more details. 
 
 ## Citations
 
@@ -181,7 +176,6 @@ If you use this workflow in a publication, please cite the following tools:
 - FastQC
 - fastp
 - HISAT2
-- kallisto
 - featureCounts (Subread)
 - MultiQC
 

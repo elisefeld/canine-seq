@@ -373,24 +373,24 @@ rule flagstat_aligned:
 
 rule feature_counts:
     input:
-        bam=SORTED_BAM,
-        bai=BAI,
+        bams=expand(f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam', sample=SAMPLES),
+        bais=expand(f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam.bai', sample=SAMPLES),
         gtf=GTF
     output:
-        counts=f'{RESULTS_DIR}/featurecounts/{{sample}}_counts.txt'
+        counts=f'{RESULTS_DIR}/featurecounts/counts.txt'
     threads:
         config['threads']['featurecounts']
     log:
         f'{LOGS_DIR}/featurecounts/{{sample}}_featurecounts.log'
     shell:
         '''
-        echo 'Running featureCounts for {input.bam}...'
+        echo 'Running featureCounts for {input.bams}...'
         featureCounts -p \
         -g gene_id \
         -a {input.gtf} \
         -o {output.counts} \
         -T {threads} \
-        {input.bam} \
+        {input.bams} \
         &> {log}
         '''
 
@@ -403,7 +403,7 @@ rule multiqc:
         flagstat_aligned=expand(f'{RESULTS_DIR}/flagstat/{{sample}}_aligned.txt', sample=SAMPLES),
         fastqc=expand(f'{RESULTS_DIR}/fastqc/{{sample}}_{{read}}_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
         fastqc_trimmed=expand(f'{RESULTS_DIR}/fastqc/{{sample}}_{{read}}_fastqc_trimmed.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
-        featurecounts=expand(f'{RESULTS_DIR}/featurecounts/{{sample}}_counts.txt', sample=SAMPLES)
+        featurecounts=f'{RESULTS_DIR}/featurecounts/counts.txt'
         #kallisto=expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES)
     output:
         html=f'{REPORT_DIR}/multiqc_report.html'

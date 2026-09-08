@@ -170,7 +170,8 @@ rule fastp_trim:
     output:
         trimmed_read1=TRIM_R1,
         trimmed_read2=TRIM_R2,
-        fastp=multiext(f'{RESULTS_DIR}/fastp/{{sample}}','.html','.json')
+        html=f'{RESULTS_DIR}/fastp/{{sample}}.html',
+        json=f'{RESULTS_DIR}/fastp/{{sample}}.json'
     threads:
         config['threads']['fastp']
     log:
@@ -184,6 +185,8 @@ rule fastp_trim:
          -O {output.trimmed_read2} \
          -i {input.read1} \
          -I {input.read2} \
+         -h {output.html} \
+         -j {output.json} \
          &> {log}
         '''
 

@@ -1,0 +1,6 @@
+﻿seq_type,subject_name,sample_id,study,treatment_stage,treatment,subject,time,tissue,sample_type,batch,lane,flowcell_id,end_type,sequencer,read_length,sex,age,disease
+Bulk mRNA Seq,Subject 1,SAMPLE001,my_study,pre-treatment,my_drug,1,0,Lymph Node,Fine Needle Aspirate,1,1,my_id1,paired,Illumina NovaSeq,100bp,Female,3,disease1
+Bulk mRNA Seq,Subject 1,SAMPLE001,my_study,post-treatment,my_drug,1,1,Lymph Node,Fine Needle Aspirate,1,1,my_id1,paired,Illumina NovaSeq,100bp,Female,3,disease1
+Bulk mRNA Seq,Subject 1,SAMPLE001,my_study,post-treatment,my_drug,1,2,Lymph Node,Fine Needle Aspirate,1,1,my_id1,paired,Illumina NovaSeq,100bp,Female,3,disease1
+Bulk mRNA Seq,Subject 2,SAMPLE002,my_study,pre-treatment,my_drug,2,0,Lymph Node,Fine Needle Aspirate,1,1,my_id1,paired,Illumina NovaSeq,100bp,Male,5,disease2
+Bulk mRNA Seq,Subject 2,SAMPLE002,my_study,post-treatment,my_drug,2,1,Lymph Node,Fine Needle Aspirate,1,1,my_id1,paired,Illumina NovaSeq,100bp,Male,5,disease2

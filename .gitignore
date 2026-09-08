@@ -17,4 +17,5 @@ internal_notes.md
 !config/example_sheet.csv
 !workflow.png
 !config/env.yaml
+!data/reference/
 !data/reference/.gitkeep

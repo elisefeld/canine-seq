@@ -163,6 +163,7 @@ runs/<RUN_NAME>/
     └── hisat2/
 ```
 
+---
 ## License
 
 This project is distributed under the MIT license. See the [license](LICENSE) for more details. 

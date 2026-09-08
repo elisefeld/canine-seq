@@ -1,17 +1,5 @@
 project:
   name: ORBIT # Name of project used to define input and output directories
-  tissue_type: Lymph Node
-  sample_type: Fine Needle Aspirate
-  disease: Cancer
-  PI: Shruthi Naik
-
-seq:
-  platform: Illumina NovaSeq X
-  type: RNA-seq 
-  end_type: Paired
-  read_length: 100
-  flowcell_id: 20260602_LH00761_0167_A22K7HFLT1
-  lane: 1
 
 run:
   run_name:  run_ORBIT_updatedref_new

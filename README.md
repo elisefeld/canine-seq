@@ -1,45 +1,119 @@
 # canine-seq
 
-This project automates the analysis of bulk RNA-seq data (.cram format) from canine subjects. 
-
-## Overview
-
-This project provides a reproducible workflow for:
-
-- Converting .cram to .bam
-- 
-- 
-
-The workflow is implemented using Snakemake and is designed to support reproducible analysis.
+This project automates the analysis of paired-end bulk RNA-seq data in unaligned CRAM format.  
 
 ## Features
 
-- Reproducible workflow execution
-- Automated dependency management
-- Modular pipeline design
-- Configurable parameters
-- Built-in quality control and reporting
+- `samtools`: FASTQ extraction from CRAM files
+- `fastqc`: quality control metrics
+- `fastp`: Adapter and quality trimming
+- `HISAT2`: Genome alignment
+- `featureCounts`: Gene-level quantification
+- `kallisto` Pseudoalignment and gene-level quantification. Disabled by default.
+- `MultiQC`: Aggregated quality control reports
 
-## Workflow
+---
+## Usage
+
+### Input Structure
+
+Raw data and the sample sheet must be stored in a project-specific directory under `data/`. Reference files must be stored under a reference directory named using the species, build, and release values specified in `config.yaml`.
+
+The sample sheet must contain a column named `sample_id` containing sample names that exactly match the CRAM filenames (excluding extensions).
 
 ```text
-Input Data
-    ↓
-Preprocessing
-    ↓
-Analysis
-    ↓
-Quality Control
-    ↓
-Results
+canine_seq/
+├── config/
+│   └── config.yaml
+├── data/
+│   ├── <PROJECT>/
+│   │   ├── sample.cram
+│   │   ├── sample.cram.crai
+│   │   └── <SAMPLE_SHEET>
+│   │
+│   └── reference/
+│       └── <SPECIES>_<BUILD>_<RELEASE>/
+│           ├── <FASTA>
+│           ├── <CDNA>
+│           └── <GTF>
+│
+└── runs/
+    └── <RUN_NAME>/
+        ├── logs/
+        ├── report/
+        └── results/
 ```
 
-## Quick Start
+### Example Configuration
 
-### Dependencies
-- snakemake v
-- a conda package manager (miniforge3 was used for this project)
- 
+**config.yaml**
+
+```yaml
+project:
+  name: my_project
+
+run:
+  run_name: my_run
+  sample_sheet: sample_sheet.csv
+  ref_species: Canis_lupus_familiarisgsd
+  ref_build: UU_Cfam_GSD_1.0
+  ref_release: 116
+
+ref:
+  fasta: genome.fa
+  cdna: cdna.fa
+  gtf: genes.gtf.gz
+```
+
+**sample_sheet.csv**
+
+```csv
+sample_id
+SAMPLE001
+```
+
+### Example Directory Layout
+
+```text
+canine_seq/
+├── data/
+│   ├── my_project/
+│   │   ├── SAMPLE001.cram
+│   │   ├── SAMPLE001.cram.crai
+│   │   └── sample_sheet.csv
+│   │
+│   └── reference/
+│       └── Canis_lupus_familiarisgsd_UU_Cfam_GSD_1.0_116/
+│           ├── genome.fa
+│           ├── cdna.fa
+│           └── genes.gtf.gz
+│
+└── runs/
+    └── my_run/
+        ├── logs/
+        ├── report/
+        └── results/
+```
+
+---
+
+## Dependencies
+- Snakemake
+- Python ≥ 3.9
+- pandas
+- samtools
+- FastQC
+- fastp
+- HISAT2
+- kallisto
+- featureCounts (Subread)
+- MultiQC
+
+It is recommended to run this program inside a conda enviornment using a conda package manager and `config/env.yaml` .
+
+
+## Installation
+
 Clone the repository:
 
 ```bash
@@ -47,71 +121,68 @@ git clone https://github.com/elisefeld/canine-seq.git
 cd project
 ```
 
-Install dependencies:
+Detailed installation instructions are available in:
+
+```text
+INSTALL.md
+```
+---
+## Running the Workflow
+
+Perform a dry run:
 
 ```bash
-# See INSTALL.md for detailed setup
+snakemake -n -p
 ```
 
-Run the workflow:
+Run the pipeline:
 
 ```bash
 snakemake --cores 8
 ```
 
-## Repository Structure
+Generate a workflow DAG:
 
-```text
-.
-├── config/         # configuration files
-├── docs/           # project documentation
-├── logs/           # workflow logs
-├── resources/      # raw and reference data
-├── scripts/        # analysis scripts
-├── workflow/       # snakefile and rules
-└── results/        # generated outputs
+```bash
+snakemake --dag | dot -Tpdf > dag.pdf
 ```
 
-## Configuration
+---
 
-Pipeline settings are controlled through:
+## Output
 
-```text
-config/config.yaml
-```
-
-Modify the configuration file before running analyses.
-
-## Input Data
-
-This project currently only supports already aligned data in cram format. Add a folder in /resources/data/raw named with the project name. It should include the raw data and a sample sheet.
+Upon completion, the workflow will generate:
 
 ```text
-/resources/data/raw/PROJECT_NAME
-├── sample_sheet.csv
-├── file_1.cram
-└── file_1.cram.crai
+runs/<RUN_NAME>/
+├── logs/
+├── report/
+│   └── multiqc_report.html
+└── results/
+    ├── fastqc/
+    ├── fastp/
+    ├── flagstat/
+    ├── kallisto/
+    ├── featurecounts/
+    ├── bam/
+    └── hisat2/
 ```
-
-## Outputs
-
-The workflow generates:
-
-| Output | Description |
-|----------|-------------|
-| results/summary.csv | Final summary table |
-| results/figures/ | Generated plots |
-| results/reports/ | QC reports |
-
-
-## Installation
-
-Detailed installation instructions are available in
-[INSTALL.md](INSTALL.md).
 
 ## License
 
 This project is distributed under the MIT license. See license.md for more details. 
 
+## Citations
 
+If you use this workflow in a publication, please cite the following tools:
 
+- Snakemake
+- samtools
+- FastQC
+- fastp
+- HISAT2
+- kallisto
+- featureCounts (Subread)
+- MultiQC
+
+Please also cite the reference genome and gene annotation resources used in your analysis.

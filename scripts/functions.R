@@ -158,7 +158,8 @@ extract_coefs <- function(dds,
     mutate(regulation = case_when(
       (padj < min_alpha & abs(log2FoldChange) > min_logfold & log2FoldChange > 0) ~ "upregulated",
       (padj < min_alpha & abs(log2FoldChange) > min_logfold & log2FoldChange < 0) ~ "downregulated",
-      T ~ "nonDE"))
+      T ~ "nonDE"),
+      coefficient = factor(coefficient, levels = resultsNames(dds))) 
   return(df)
 }
 

@@ -46,7 +46,7 @@ It is recommended to run this program inside a conda environment using a conda p
 
 Raw data and the sample sheet must be stored in a project-specific directory under `data/`. Reference files must be stored under a reference directory named using the species, build, and release values specified in `config.yaml`.
 
-The sample sheet must contain a column named `sample_id` containing sample names that exactly match the CRAM filenames (excluding extensions).
+The sample sheet must contain a column named `sample_id` containing sample names that exactly match the CRAM filenames (excluding extensions). An example sample sheet is provided [here](config/example_sheet.csv).
 
 ```text
 canine_seq/

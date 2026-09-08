@@ -30,7 +30,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
 }
 
-#BiocManager::install(c("tidyverse","stringr","kableExtra","rtracklayer","tximport","DESeq2","Glimma","apeglm","msigdbr","clusterProfiler"))
+#BiocManager::install(c("tidyverse","stringr","kableExtra","rtracklayer","tximport","DESeq2","Glimma","apeglm","msigdbr","clusterProfiler", "DEGreport"))
 
 library(tidyverse)
 library(stringr)
@@ -42,6 +42,7 @@ library(Glimma)
 library(apeglm)
 library(msigdbr)
 library(clusterProfiler)
+library(DEGreport)
 ```
 
 ### Parameters
@@ -78,7 +79,7 @@ counts <- process_counts(txi$counts, sample_sheet, tx2gene)
 
 ### Sample Overview
 
-The table below summarizes the samples included in this analysis, including subject identifiers, time, batch, and clinical information
+The table below summarizes the samples included in this analysis, including subject identifiers, time, batch, and clinical information.
 
 ```{r echo = FALSE}
 sample_sheet |>
@@ -98,7 +99,7 @@ sample_sheet |>
 
 ### Workflow Validation
 
-To validate the workflow, gene-level abundance estimates were compared against independently generated kallisto results from the RapMap pipeline using reference (ROS_Cfam_1.0). Because the results were generated with different reference builds, genes were shared by matched gene names instead of Ensembl IDs. This introduces some amount of error given that gene names can differ between references. High correlations indicate strong agreement between pipelines and provide confidence in validity of the data. 
+To validate the workflow, gene-level abundance estimates were compared against independently generated kallisto results from the RapMap pipeline using reference (ROS_Cfam_1.0). Because the results were generated with different reference builds, genes were matched by shared gene names instead of Ensembl IDs. This introduces some amount of error given that gene names can differ between references. High correlations indicate strong agreement between pipelines and provide confidence in validity of the data. 
 
 ```{r echo = FALSE}
 mayo_abd <- read.table(mayo_gene_counts, header = TRUE, sep = "\t") |>
@@ -185,7 +186,7 @@ counts_tbl <- counts |>
             max_count = max(count),
             num_genes = sum(count > 0),
             .by = c("subject", "time")) |>
-    dplyr::mutate(normalization = "yes")
+    dplyr::mutate(normalization = "no")
   
 counts_norm_tbl <- counts_norm |>
      dplyr::summarize(total_count = sum(count),
@@ -194,7 +195,7 @@ counts_norm_tbl <- counts_norm |>
             max_count = max(count),
             num_genes = sum(count > 0),
             .by = c("subject", "time")) |>
-  dplyr::mutate(normalization = "no")
+  dplyr::mutate(normalization = "yes")
 ```
 
 ```{r echo = FALSE, message = FALSE}
@@ -209,6 +210,7 @@ counts_tbl |>
   scroll_box(width = "100%", height = "50%")
 ```
 
+
 Similar distributions following normalization suggest that differences in sequencing depth have been corrected. The normalized gene counts are smaller because DESeq2 filters out genes with low counts. 
 ```{r echo = FALSE}
 counts_norm |>
@@ -219,7 +221,7 @@ counts_norm |>
 
 ### Multidimensional Scaling (MDS)
 
-A multidimensional scaling plot shows sample-to-sample relationships. Samples clustering by subject indicate differences in expression between dogs, while clustering by time point may suggest changes in expression because of the treatment. In this case, subject appears to explain 49% of variance.
+A multidimensional scaling plot shows relationships between samples. Samples clustering by subject indicate differences in expression between dogs, while clustering by time point may suggest changes in expression because of the treatment. In this case, subject appears to explain 49% of variance.
 
 ```{r}
 glimmaMDS(dds)
@@ -239,14 +241,23 @@ DESeq2 estimates log2 Fold-Change values for each gene to describe the effect si
 
 ```{r echo = FALSE}
 res <- results(dds)
-plotMA(res, alpha = 0.1, ylim = c(-2, 2), cex = 1.5, main = "MA-plot before LFC shrinkage (time_49_vs_0)")
+plotMA(res, alpha = 0.1, ylim = c(-2, 2), cex = 1.5, main = "MA-plot before LFC shrinkage")
 
 resLFC <- lfcShrink(dds, coef = "time_49_vs_0", type = "apeglm")
-plotMA(resLFC, alpha = 0.1, ylim = c(-2, 2), cex = 1.5, main = "MA-plot after LFC shrinkage (time_49_vs_0)")
+plotMA(resLFC, alpha = 0.1, ylim = c(-2, 2), cex = 1.5, main = "MA-plot after LFC shrinkage")
 ```
 
 ```{r}
-df <- extract_coefs(dds, tx2gene, homologs, min_alpha = min_alpha, min_logfold = min_logfold, shrink)
+df_non_shrunk <- extract_coefs(dds, tx2gene, homologs, min_alpha = min_alpha, min_logfold = min_logfold, shrink = FALSE)
+df_shrunk <- extract_coefs(dds, tx2gene, homologs, min_alpha = min_alpha, min_logfold = min_logfold, shrink = TRUE)
+
+df <- df_non_shrunk
+
+df_filter <- df |>
+  dplyr::filter(regulation != "nonDE",
+                coefficient != "subject_2_vs_1",
+                coefficient != "time_49_vs_0",
+                coefficient != "time_10_vs_0") # removing time 10 and 49 because there is only one subject for them
 ```
 
 ## Results
@@ -254,29 +265,56 @@ df <- extract_coefs(dds, tx2gene, homologs, min_alpha = min_alpha, min_logfold =
 Differential expression results are explored through interactive MA and volcano plots, which allow visualization of effect sizes and p-values. 
 
 ```{r}
-df_filter <- df |>
-  dplyr::filter(regulation != "nonDE",
-                coefficient != "subject_2_vs_1",
-                coefficient != "time_49_vs_0",
-                coefficient != "time_10_vs_0") # removing time 10 and 49 because there is only one subject for them
-
 glimmaMA(dds, groups = colData(dds)$time)
 glimmaVolcano(dds, groups = colData(dds)$time)
 ```
 
 The summary table below reports the number of significantly regulated genes identified for each model coefficient. Positive log2 fold changes represent increased expression relative to baseline and negative values indicate decreased expression. Results are filtered using both adjusted p-value and minimum fold-change thresholds.
 
-```{r echo = FALSE}
-df |>
+#### Before lfcShrink
+```{r}
+df_non_shrunk |>
   mutate(sig = padj < min_alpha & abs(log2FoldChange) > min_logfold) |>
   group_by(coefficient) |>
   summarise(DE_genes = sum(sig),
             Up = sum(sig & log2FoldChange > 0),
             Down = sum(sig & log2FoldChange < 0)) |>
-  arrange(desc(DE_genes)) |>
+  arrange(coefficient) |>
    kbl(col.names = c("Coefficient", "Number of DE Genes", "Upregulated", "Downregulated"),
       format.args = list(big.mark = ","),
       row.names = FALSE) |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
+  scroll_box(width = "100%", height = "50%")
+```
+
+#### After lfcShrink
+```{r echo = FALSE}
+df_shrunk |>
+  mutate(sig = padj < min_alpha & abs(log2FoldChange) > min_logfold) |>
+  group_by(coefficient) |>
+  summarise(DE_genes = sum(sig),
+            Up = sum(sig & log2FoldChange > 0),
+            Down = sum(sig & log2FoldChange < 0)) |>
+  arrange(coefficient) |>
+   kbl(col.names = c("Coefficient", "Number of DE Genes", "Upregulated", "Downregulated"),
+      format.args = list(big.mark = ","),
+      row.names = FALSE) |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
+  scroll_box(width = "100%", height = "50%")
+```
+
+
+
+#### Differentially Expressed Genes (abs(log2FC) > 1)
+```{r}
+df_filter |>
+  select(coefficient, regulation, human_gene_name, gene_id, padj, log2FoldChange) |>
+  filter(abs(log2FoldChange) > 1) |>
+  arrange(coefficient, regulation, padj, log2FoldChange) |>
+    kbl(col.names = c("Coefficient", "Regulation", "Human Gene", "Dog Gene ID", "Adjusted p-value", "Log2 Fold-Change"),
+      format.args = list(big.mark = ","),
+      row.names = FALSE) |>
+  collapse_rows(columns = c(1,2), valign = "top") |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
   scroll_box(width = "100%", height = "50%")
 ```
@@ -326,27 +364,6 @@ counts_norm |>
 ```
 
 ```{r eval = FALSE}
-up3 <- df_filter |>
-  filter(regulation == "upregulated" & coefficient == "time_3_vs_0") |>
-  pull(gene_id) 
-
-counts_norm |>
-  filter(gene_id %in% up3) |>
-   left_join(homologs, by = c("gene_id" = "dog_gene_id")) |>
-   dplyr::mutate(human_gene_name = coalesce(human_gene_name,
-                                           gene_id)) |>
-  ggplot(aes(x = time_num, y = count, shape = time, color = subject)) +
-  geom_point() +
-  #geom_smooth(method = "loess", se = FALSE) +
-  theme_classic() +
-  facet_wrap(~human_gene_name, scales = "free") +
-  labs(
-    x = "Time (days)",
-    y = "Normalized count",
-    title = "Upregulated Genes")
-```
-
-```{r eval = FALSE}
 # create table here of gene and coefficients where it is differentially expressed
 plot_list <- df_filter |>
   group_split(regulation, coefficient) |>
@@ -363,6 +380,12 @@ plot_list <- df_filter |>
       labs(title = paste(
           unique(df_sub$regulation),
           unique(df_sub$coefficient)))})
+```
+
+
+```{r eval = FALSE}
+ma = assay(rlog(dds))[row.names(res)[1:100],]
+res <- degPatterns(ma, design, time = "group")
 ```
 
 # Gene Set Enrichment

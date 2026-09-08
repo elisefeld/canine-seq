@@ -28,7 +28,7 @@ Detailed installation instructions are available in [install.md](docs/INSTALL.md
 
 ### Dependencies
 - Snakemake
-- Python ≥ 3.9
+- Python ≥ 3.14
 - pandas
 - samtools
 - FastQC

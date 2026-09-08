@@ -121,7 +121,17 @@ canine_seq/
         ├── report/
         └── results/
 ```
-
+### Threads
+The number of threads can be specified for each tool using `config.yaml`.
+```yaml
+threads:
+  samtools: 6
+  fastqc: 1
+  fastp: 4
+  kallisto: 4
+  hisat2: 8
+  featurecounts: 2
+```
 ---
 
 ## Running the Workflow

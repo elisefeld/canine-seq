@@ -12,6 +12,8 @@ This project automates the analysis of paired-end bulk RNA-seq data in unaligned
 - `kallisto` Pseudoalignment and gene-level quantification. Disabled by default.
 - `MultiQC`: Aggregated quality control reports
 
+
+![Rulegraph of canine-seq workflow](docs/workflow.png "Workflow")
 ---
 
 ## Installation

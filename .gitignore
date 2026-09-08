@@ -6,6 +6,7 @@ data/*
 
 # files
 internal_notes.md
+*.html
 *.png
 *.csv 
 *.Rdata

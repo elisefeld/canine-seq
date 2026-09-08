@@ -1,9 +1,19 @@
-.snakemake
-tmp
+# directories
+.snakemake/
+tmp/
+runs/
 data/*
-runs/*
+
+# files
 internal_notes.md
-*.html
+*.png
+*.csv 
 *.Rdata
 *.Rhistory
 *.pyc
+
+# exceptions
+!config/example_sheet.csv
+!workflow.png
+!config/env.yaml
+!data/reference/.gitkeep

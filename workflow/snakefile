@@ -381,7 +381,7 @@ rule feature_counts:
     threads:
         config['threads']['featurecounts']
     log:
-        f'{LOGS_DIR}/featurecounts/{{sample}}_featurecounts.log'
+        f'{LOGS_DIR}/featurecounts/featurecounts.log'
     shell:
         '''
         echo 'Running featureCounts for {input.bams}...'

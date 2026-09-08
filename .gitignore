@@ -1,12 +1,9 @@
 .snakemake
-runs
 tmp
-data
+data/*
+runs/*
 internal_notes.md
-*.html
-*.csv
 *.html
 *.Rdata
 *.Rhistory
 *.pyc
-*.png

@@ -144,17 +144,19 @@ Perform a dry run:
 snakemake -n -p
 ```
 
+Generate a workflow DAG:
+
+```bash
+snakemake --dag | dot -Tpdf > dag.pdf
+```
+
 Run the pipeline:
 
 ```bash
 snakemake --cores 8
 ```
 
-Generate a workflow DAG:
 
-```bash
-snakemake --dag | dot -Tpdf > dag.pdf
-```
 
 ## Output
 
@@ -162,10 +164,11 @@ Upon completion, the workflow will generate:
 
 ```text
 runs/<RUN_NAME>/
-├── logs/
+├── logs/ 
 ├── report/
+    ├── multiqc_data/
 │   └── multiqc_report.html
-└── results/
+└── results/ 
     ├── fastqc/
     ├── fastp/
     ├── flagstat/
@@ -174,6 +177,8 @@ runs/<RUN_NAME>/
     ├── bam/
     └── hisat2/
 ```
+
+`results/featurecounts` will contain the unmerged gene counts for each sample. 
 
 ---
 ## License

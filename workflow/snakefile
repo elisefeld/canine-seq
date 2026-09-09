@@ -183,8 +183,8 @@ rule fastqc_trimmed:
         read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
         read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz'
     output:
-        R1=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc_trimmed','.html','.zip'),
-        R2=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc_trimmed','.html','.zip')
+        R1=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_trimmed_fastqc','.html','.zip'),
+        R2=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_trimmed_fastqc','.html','.zip')
     threads:
         config['threads']['fastqc']
     log:
@@ -371,7 +371,7 @@ rule multiqc:
         flagstat=expand(f'{RESULTS_DIR}/flagstat/{{sample}}.txt', sample=SAMPLES),
         flagstat_aligned=expand(f'{RESULTS_DIR}/flagstat/{{sample}}_aligned.txt', sample=SAMPLES),
         fastqc=expand(f'{RESULTS_DIR}/fastqc/{{sample}}_{{read}}_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
-        fastqc_trimmed=expand(f'{RESULTS_DIR}/fastqc/{{sample}}_{{read}}_fastqc_trimmed.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
+        fastqc_trimmed=expand(f'{RESULTS_DIR}/fastqc/{{sample}}_{{read}}_trimmed_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
         featurecounts=f'{RESULTS_DIR}/featurecounts/counts.txt'
         #kallisto=expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES)
     output:

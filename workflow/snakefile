@@ -30,18 +30,6 @@ for directory in dirs:
 FASTA = os.path.join(REF_DIR, config['ref']['fasta'])
 GTF   = os.path.join(REF_DIR, config['ref']['gtf'])
 CDNA  = os.path.join(REF_DIR, config['ref']['cdna'])
-CRAM = os.path.join(DATA_DIR, '{sample}.cram')
-
-FASTQ_R1 = os.path.join(RESULTS_DIR, 'fastq', '{sample}_R1.fastq.gz')
-FASTQ_R2 = os.path.join(RESULTS_DIR, 'fastq', '{sample}_R2.fastq.gz')
-
-TRIM_R1 = os.path.join(RESULTS_DIR, 'fastp', '{sample}_R1_trimmed.fastq.gz')
-TRIM_R2 = os.path.join(RESULTS_DIR, 'fastp', '{sample}_R2_trimmed.fastq.gz')
-
-SORTED_CRAM = os.path.join(RESULTS_DIR, 'sort', '{sample}.cram')
-SAM = os.path.join(RESULTS_DIR, 'hisat2', '{sample}.sam')
-SORTED_BAM = os.path.join(RESULTS_DIR, 'bam', '{sample}_sorted.bam')
-BAI = f'{SORTED_BAM}.bai'
 
 # File declaration and checks
 SAMPLE_SHEET = os.path.join(DATA_DIR, config['run']['sample_sheet'])
@@ -93,7 +81,7 @@ rule all:
 ###########################
 rule flagstat:
     input: 
-        cram=CRAM
+        cram=f'{DATA_DIR}/{{sample}}.cram'
     output: 
         txt=f'{RESULTS_DIR}/flagstat/{{sample}}.txt'
     shell:
@@ -104,9 +92,9 @@ rule flagstat:
 
 rule sort_cram:
     input:
-        cram=CRAM
+        cram=f'{DATA_DIR}/{{sample}}.cram'
     output:
-        sorted_cram=temp(SORTED_CRAM)
+        sorted_cram=temp(f'{RESULTS_DIR}/sort/{{sample}}.cram')
     threads:
         config['threads']['samtools']
     log:
@@ -123,10 +111,10 @@ rule sort_cram:
 
 rule cram_to_fastq:
     input: 
-        sorted_cram=SORTED_CRAM,
+        sorted_cram=f'{RESULTS_DIR}/sort/{{sample}}.cram',
     output:
-        read1=temp(FASTQ_R1),
-        read2=temp(FASTQ_R2)
+        read1=temp(f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz'),
+        read2=temp(f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz')
     threads: 
         config['threads']['samtools']
     log:
@@ -144,8 +132,8 @@ rule cram_to_fastq:
 
 rule fastqc:
     input:
-        read1=FASTQ_R1,
-        read2=FASTQ_R2
+        read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
         R1=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc','.html','.zip'),
         R2=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc','.html','.zip')
@@ -165,11 +153,11 @@ rule fastqc:
 
 rule fastp_trim:
     input:
-        read1=FASTQ_R1,
-        read2=FASTQ_R2
+        read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        trimmed_read1=TRIM_R1,
-        trimmed_read2=TRIM_R2,
+        trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
         html=f'{RESULTS_DIR}/fastp/{{sample}}.html',
         json=f'{RESULTS_DIR}/fastp/{{sample}}.json'
     threads:
@@ -192,8 +180,8 @@ rule fastp_trim:
 
 rule fastqc_trimmed:
     input:
-        read1=TRIM_R1,
-        read2=TRIM_R2
+        read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz'
     output:
         R1=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc_trimmed','.html','.zip'),
         R2=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc_trimmed','.html','.zip')
@@ -235,8 +223,8 @@ rule kallisto_index:
 rule kallisto_quant:
     input:
         idx=f'{CDNA}.idx',
-        trimmed_read1=TRIM_R1,
-        trimmed_read2=TRIM_R2,
+        trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
     output:
         abundance=multiext(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance','.tsv','.h5'),
         json=f'{RESULTS_DIR}/kallisto/{{sample}}/run_info.json'
@@ -302,12 +290,12 @@ rule hisat2_align:
             '.6.ht2',
             '.7.ht2',
             '.8.ht2'),
-        trimmed_read1=TRIM_R1,
-        trimmed_read2=TRIM_R2,
+        trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
     threads:
         config['threads']['hisat2']
     output:
-        sam=temp(SAM)
+        sam=temp(f'{RESULTS_DIR}/hisat2/{{sample}}.sam')
     log:
         f'{LOGS_DIR}/hisat2/{{sample}}_align.log'
     params:
@@ -325,9 +313,9 @@ rule hisat2_align:
 
 rule sort_bam:
     input:
-        sam=SAM
+        sam=f'{RESULTS_DIR}/hisat2/{{sample}}.sam'
     output:
-        sorted_bam=SORTED_BAM
+        sorted_bam=f'{RESULTS_DIR}/sort/{{sample}}_sorted.bam'
     threads:
         config['threads']['samtools']
     log:
@@ -342,27 +330,9 @@ rule sort_bam:
         &> {log}
         '''
 
-rule index_bam:
-    input:
-        sorted_bam=SORTED_BAM
-    output:
-        bai=BAI
-    threads:
-        config['threads']['samtools']
-    log:
-        f'{LOGS_DIR}/samtools/{{sample}}_indexbam.log'
-    shell:
-        '''
-        echo 'Creating index for {input.sorted_bam}...'
-        samtools index \
-        -@ {threads} \
-        {input.sorted_bam} \
-        &> {log}
-        '''
-
 rule flagstat_aligned:
     input: 
-        sorted_bam=SORTED_BAM
+        sorted_bam=f'{RESULTS_DIR}/sort/{{sample}}_sorted.bam'
     output: 
         txt=f'{RESULTS_DIR}/flagstat/{{sample}}_aligned.txt'
     shell:
@@ -373,8 +343,7 @@ rule flagstat_aligned:
 
 rule feature_counts:
     input:
-        bams=expand(f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam', sample=SAMPLES),
-        bais=expand(f'{RESULTS_DIR}/bam/{{sample}}_sorted.bam.bai', sample=SAMPLES),
+        bams=expand(f'{RESULTS_DIR}/sort/{{sample}}_sorted.bam', sample=SAMPLES),
         gtf=GTF
     output:
         counts=f'{RESULTS_DIR}/featurecounts/counts.txt'

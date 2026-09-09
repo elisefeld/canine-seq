@@ -28,7 +28,46 @@ prep_tx2gene <- function(gtf_path) {
       dplyr::mutate(gene_name = coalesce(gene_name,
                                          gene_id)) # if no gene name present, use gene id
     message("Found ", length(unique(tx2gene$transcript_id)), " unique transcripts and ", length(unique(tx2gene$gene_id)), " unique genes.")
-    return(tx2gene)
+    if (file.exists(homolog_path)) {
+      message("Reading csv from ", homolog_path, "...")
+      homologs <- read.csv(homolog_path, sep = "\t") |>
+        dplyr::filter(ref_species == "homo_sapiens") |>
+        dplyr::select(ref_gene_stable_id,
+                      ref_gene_name,
+                      query_gene_stable_id,
+                      query_gene_name) |>
+        dplyr::rename(human_gene_id = ref_gene_stable_id,
+                      human_gene_name = ref_gene_name,
+                      dog_gene_id = query_gene_stable_id,
+                      dog_gene_name = query_gene_name) |>
+        group_by(dog_gene_id) |>
+        summarise(across(everything(), ~paste0(unique(.), collapse = ", "))) |>
+        dplyr::mutate(alt_human_gene_ids = str_extract(human_gene_id, "(.*)"),
+               human_gene_id = str_extract(human_gene_id, "^[^,]+"),
+               alt_human_gene_names = str_extract(human_gene_name, "(.*)"),
+               human_gene_name = str_extract(human_gene_name, "^[^,]+"))
+      message("Found ", length(unique(homologs$human_gene_id)), " homologous genes in humans.")
+      
+      sym_to_entrez <- bitr(unique(homologs$human_gene_name), fromType='SYMBOL', toType='ENTREZID', OrgDb="org.Hs.eg.db") |>
+        group_by(SYMBOL) |>
+        summarise(across(everything(), ~paste0(unique(.), collapse = ", "))) |>
+        dplyr::mutate(alt_entrez_id = str_extract(ENTREZID, "(.*)"),
+               entrez_id = str_extract(ENTREZID, "^[^,]+")) |>
+        dplyr::select(SYMBOL, entrez_id, alt_entrez_id)
+      
+      homologs <- homologs |>
+        left_join(sym_to_entrez, by = c("human_gene_name" = "SYMBOL"))
+      
+      tx2gene <- tx2gene |>
+        left_join(homologs, by = c("gene_id" = "dog_gene_id")) |>
+        dplyr::mutate(human_gene_name = coalesce(human_gene_name, human_gene_id))
+      message(sum(is.na(tx2gene$human_gene_id)), " dog transcript IDs do not have a human equivalent.")
+      return(tx2gene)
+    }
+    else {
+      message("Homolog file ", homolog_path, " does not exist.")
+      return(tx2gene)
+    }
   }
   else {
     stop("GTF file ", gtf_path, " does not exist.")
@@ -71,8 +110,24 @@ prep_homologs <- function(homolog_path) {
                     dog_gene_id = query_gene_stable_id,
                     dog_gene_name = query_gene_name) |>
       group_by(dog_gene_id) |>
-      summarise(across(everything(), ~paste0(unique(.), collapse = ", ")))
+      summarise(across(everything(), ~paste0(unique(.), collapse = ", "))) |>
+      dplyr::mutate(has_alt_human_genes = str_detect(human_gene_id, ","),
+             alt_human_gene_ids = str_extract(human_gene_id, "(.*)"),
+             human_gene_id = str_extract(human_gene_id, "^[^,]+"),
+             alt_human_gene_names = str_extract(human_gene_name, "(.*)"),
+             human_gene_name = str_extract(human_gene_name, "^[^,]+"))
     message("Found ", length(unique(homologs$human_gene_id)), " homologous genes in humans.")
+    
+    sym_to_entrez <- clusterProfiler::bitr(unique(homologs$human_gene_name), fromType='SYMBOL', toType='ENTREZID', OrgDb="org.Hs.eg.db") |>
+      group_by(SYMBOL) |>
+      summarise(across(everything(), ~paste0(unique(.), collapse = ", "))) |>
+      dplyr::mutate(alt_entrez_id = str_extract(ENTREZID, "(.*)"),
+             entrez_id = str_extract(ENTREZID, "^[^,]+")) |>
+      dplyr::select(SYMBOL, entrez_id, alt_entrez_id)
+    
+    homologs <- homologs |>
+      left_join(sym_to_entrez, by = c("human_gene_name" = "SYMBOL"))
+    
     return(homologs)
   }
   else {
@@ -125,7 +180,7 @@ process_counts <- function(counts,
 
 extract_coefs <- function(dds,
                           tx2gene,
-                          homologs,
+                          #homologs,
                           min_alpha,
                           min_logfold,
                           shrink=TRUE) {
@@ -154,8 +209,8 @@ extract_coefs <- function(dds,
     df_list <- append(df_list, list(res))
   }
   df <- do.call(rbind, df_list) |>
-    left_join(homologs, by = c("gene_id" = "dog_gene_id")) |>
-    mutate(regulation = case_when(
+    #left_join(homologs, by = c("gene_id" = "dog_gene_id")) |>
+    dplyr::mutate(regulation = case_when(
       (padj < min_alpha & abs(log2FoldChange) > min_logfold & log2FoldChange > 0) ~ "upregulated",
       (padj < min_alpha & abs(log2FoldChange) > min_logfold & log2FoldChange < 0) ~ "downregulated",
       T ~ "nonDE"),
@@ -171,7 +226,7 @@ run_gsea <- function(dds, main_df, path_data, path_terms){
   for (coef in coefs[-1]) {
     # create ranked list of genes
     ranked_genes <- main_df |>
-      filter(coefficient == coef & !is.na(human_gene_name)) |>
+      dplyr::filter(coefficient == coef & !is.na(human_gene_name)) |>
       arrange(desc(log2FoldChange)) |>
       pull(log2FoldChange, name = human_gene_id)
     
@@ -180,7 +235,7 @@ run_gsea <- function(dds, main_df, path_data, path_terms){
                     TERM2NAME = path_terms,
                     seed = TRUE) |>
       as.data.frame() |>
-      mutate(coefficient = coef)
+      dplyr::mutate(coefficient = coef)
     
     df_list <- append(df_list, list(df_gsea))
   }

@@ -83,7 +83,7 @@ rule flagstat:
     input: 
         cram=f'{DATA_DIR}/{{sample}}.cram'
     output: 
-        txt=f'{RESULTS_DIR}/flagstat/{{sample}}.txt'
+        txt=f'{RESULTS_DIR}/flagstat/pre_align/{{sample}}.txt'
     shell:
         '''
         echo 'Running samtools flagstat on {input.cram}...'
@@ -98,7 +98,7 @@ rule sort_cram:
     threads:
         config['threads']['samtools']
     log:
-        f'{LOGS_DIR}/samtools/{{sample}}_sort.log'
+        f'{LOGS_DIR}/samtools_sort/{{sample}}_sort.log'
     shell:
         '''
         echo 'Sorting {input.cram} by name...'
@@ -135,16 +135,18 @@ rule fastqc:
         read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
         read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        R1=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_fastqc','.html','.zip'),
-        R2=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_fastqc','.html','.zip')
+        R1=multiext(f'{RESULTS_DIR}/fastqc/pre_trim/{{sample}}_R1_fastqc','.html','.zip'),
+        R2=multiext(f'{RESULTS_DIR}/fastqc/pre_trim/{{sample}}_R2_fastqc','.html','.zip')
     threads:
         config['threads']['fastqc']
     log:
-        f'{LOGS_DIR}/fastqc/{{sample}}_fastqc.log'
+        f'{LOGS_DIR}/fastqc/pre_trim/{{sample}}_fastqc.log'
+    params:
+        out_dir=f'{RESULTS_DIR}/fastqc/pre_trim'
     shell:
         '''
         echo 'Running a quality control report for {input.read1} and {input.read2}...'
-        fastqc -o {RESULTS_DIR}/fastqc \
+        fastqc -o {params.out_dir} \
          -t {threads} \
          {input.read1} \
          {input.read2} \
@@ -183,16 +185,18 @@ rule fastqc_trimmed:
         read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
         read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz'
     output:
-        R1=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R1_trimmed_fastqc','.html','.zip'),
-        R2=multiext(f'{RESULTS_DIR}/fastqc/{{sample}}_R2_trimmed_fastqc','.html','.zip')
+        R1=multiext(f'{RESULTS_DIR}/fastqc/post_trim/{{sample}}_R1_trimmed_fastqc','.html','.zip'),
+        R2=multiext(f'{RESULTS_DIR}/fastqc/post_trim/{{sample}}_R2_trimmed_fastqc','.html','.zip')
     threads:
         config['threads']['fastqc']
     log:
-        f'{LOGS_DIR}/fastqc/{{sample}}_fastqc_trimmed.log'
+        f'{LOGS_DIR}/fastqc/post_trim/{{sample}}_fastqc_trimmed.log'
+    params:
+        out_dir=f'{RESULTS_DIR}/fastqc/post_trim'
     shell:
         '''
         echo 'Running a quality control report for {input.read1} and {input.read2}...'
-        fastqc -o {RESULTS_DIR}/fastqc \
+        fastqc -o {params.out_dir} \
          -t {threads} \
          {input.read1} \
          {input.read2} \
@@ -319,7 +323,7 @@ rule sort_bam:
     threads:
         config['threads']['samtools']
     log:
-        f'{LOGS_DIR}/samtools/{{sample}}_sortbam.log'
+        f'{LOGS_DIR}/samtools_sort/{{sample}}_sortbam.log'
     shell:
         '''
         echo 'Sorting {input.sam} by name...'
@@ -334,7 +338,7 @@ rule flagstat_aligned:
     input: 
         sorted_bam=f'{RESULTS_DIR}/sort/{{sample}}_sorted.bam'
     output: 
-        txt=f'{RESULTS_DIR}/flagstat/{{sample}}_aligned.txt'
+        txt=f'{RESULTS_DIR}/flagstat/post_align/{{sample}}_aligned.txt'
     shell:
         '''
         echo 'Running samtools flagstat on {input.sorted_bam}...'
@@ -368,21 +372,25 @@ rule feature_counts:
 ###########################
 rule multiqc:
     input:
-        flagstat=expand(f'{RESULTS_DIR}/flagstat/{{sample}}.txt', sample=SAMPLES),
-        flagstat_aligned=expand(f'{RESULTS_DIR}/flagstat/{{sample}}_aligned.txt', sample=SAMPLES),
-        fastqc=expand(f'{RESULTS_DIR}/fastqc/{{sample}}_{{read}}_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
-        fastqc_trimmed=expand(f'{RESULTS_DIR}/fastqc/{{sample}}_{{read}}_trimmed_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
+        flagstat=expand(f'{RESULTS_DIR}/flagstat/pre_align/{{sample}}.txt', sample=SAMPLES),
+        flagstat_aligned=expand(f'{RESULTS_DIR}/flagstat/post_align/{{sample}}_aligned.txt', sample=SAMPLES),
+        fastqc=expand(f'{RESULTS_DIR}/fastqc/pre_trim/{{sample}}_{{read}}_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
+        fastqc_trimmed=expand(f'{RESULTS_DIR}/fastqc/post_trim/{{sample}}_{{read}}_trimmed_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
         featurecounts=f'{RESULTS_DIR}/featurecounts/counts.txt'
         #kallisto=expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES)
     output:
         html=f'{REPORT_DIR}/multiqc_report.html'
     log:
         f'{LOGS_DIR}/multiqc.log'
+    params:
+        fastqc_ignore=f'{LOGS_DIR}/fastqc/pre_trim/*',
+        flagstat_ignore=f'{RESULTS_DIR}/flagstat/pre_align/*'
     shell:
         '''
-        multiqc {DATA_DIR} \
-        {RESULTS_DIR} \
+        multiqc {RESULTS_DIR} \
         {LOGS_DIR} \
+        --ignore {params.fastqc_ignore} \
+        --ignore {params.flagstat_ignore} \
         -o {REPORT_DIR} \
         &> {log}
         '''

@@ -14,7 +14,7 @@ prep_samples <- function(sample_sheet_path) {
   }
 }
 
-prep_tx2gene <- function(gtf_path) {
+prep_tx2gene <- function(gtf_path, homolog_path) {
   if (file.exists(gtf_path)) {
     message("Reading annotation file from ", gtf_path, "...")
     tx2gene <- rtracklayer::readGFF(gtf_path) |>
@@ -135,16 +135,29 @@ prep_homologs <- function(homolog_path) {
   }
 }
 
-run_model <- function(txi,
+run_model <- function(counts,
                       sample_sheet,
                       design,
                       reduced,
                       test = "Wald",
                       min_count,
-                      min_samples) {
-  dds <- DESeqDataSetFromTximport(txi,
+                      min_samples,
+                      type = "txi") {
+  if (type == "txi") {
+    dds <- DESeqDataSetFromTximport(counts,
+                                    colData = sample_sheet,
+                                    design = design)
+  }
+  else if (type == "matrix") {
+    dds <- DESeqDataSetFromMatrix(counts,
                                   colData = sample_sheet,
                                   design = design)
+  }
+  
+  else {
+    stop(type, " is not a valid type")
+  }
+  
   message("Filtering out genes that don't have a count above ", min_count, " in ", min_samples, " or more samples")
   keep <- rowSums(counts(dds) >= min_count) >= min_samples # filtering for low counts
   dds <- dds[keep, ]
@@ -180,7 +193,7 @@ process_counts <- function(counts,
 
 extract_coefs <- function(dds,
                           tx2gene,
-                          #homologs,
+                          hastx2gene = TRUE,
                           min_alpha,
                           min_logfold,
                           shrink=TRUE) {
@@ -196,17 +209,29 @@ extract_coefs <- function(dds,
         res <- results(dds, name = coef)
       }
   
+      if (hastx2gene == TRUE){
+        res <- res |>
+          as.data.frame() |>
+          rownames_to_column("gene_id") |>
+          left_join(tx2gene,
+                    by = "gene_id") |>
+          dplyr::select(-transcript_id) |>
+          dplyr::distinct(gene_id, .keep_all = TRUE) |>
+          dplyr::filter(!is.na(padj)) |> # genes with extreme outliers are set to NA in DESeq2
+          dplyr::arrange(padj) |>
+          dplyr::mutate(coefficient = coef)
+        df_list <- append(df_list, list(res))
+      }
+    else {
       res <- res |>
-      as.data.frame() |>
-      rownames_to_column("gene_id") |>
-      left_join(tx2gene,
-                by = "gene_id") |>
-      dplyr::select(-transcript_id) |>
-      dplyr::distinct(gene_id, .keep_all = TRUE) |>
-      dplyr::filter(!is.na(padj)) |> # genes with extreme outliers are set to NA in DESeq2
-      dplyr::arrange(padj) |>
-      dplyr::mutate(coefficient = coef)
-    df_list <- append(df_list, list(res))
+        as.data.frame() |>
+        rownames_to_column("gene_id") |>
+        dplyr::filter(!is.na(padj)) |> # genes with extreme outliers are set to NA in DESeq2
+        dplyr::arrange(padj) |>
+        dplyr::mutate(coefficient = coef)
+      df_list <- append(df_list, list(res))
+    }
+      
   }
   df <- do.call(rbind, df_list) |>
     #left_join(homologs, by = c("gene_id" = "dog_gene_id")) |>
@@ -218,10 +243,16 @@ extract_coefs <- function(dds,
   return(df)
 }
 
-run_gsea <- function(dds, main_df, path_data, path_terms){
+run_gsea <- function(dds, main_df, collection, subcollection = NULL){
   set.seed(42)
   df_list <- list()
   coefs <- resultsNames(dds)
+  
+  path_terms <- msigdbr(species = "Homo sapiens", collection = collection, subcollection = subcollection) |>
+    dplyr::select(gs_name, gs_description)
+  
+  path_data <- msigdbr(species = "Homo sapiens", collection = collection, subcollection = subcollection) |>
+    dplyr::select(gs_name, ensembl_gene)
   
   for (coef in coefs[-1]) {
     # create ranked list of genes
@@ -235,10 +266,58 @@ run_gsea <- function(dds, main_df, path_data, path_terms){
                     TERM2NAME = path_terms,
                     seed = TRUE) |>
       as.data.frame() |>
-      dplyr::mutate(coefficient = coef)
+      dplyr::mutate(coefficient = coef,
+                    regulation = case_when((NES > 0) ~ "upregulated",
+                                           (NES < 0) ~ "downregulated",
+                                           T ~ "nonDE"),
+                    pathway = str_trim(str_to_title(str_replace_all(ID, "_", " "))))
     
     df_list <- append(df_list, list(df_gsea))
   }
   df_gsea <- do.call(rbind, df_list)
+  df_gsea <- df_gsea |>
+    mutate(coefficient = factor(coefficient, levels = resultsNames(dds)))
   return(df_gsea)
+}
+
+plot_gsea <- function(df, str_pattern = " ", n = 3) {
+  
+  up_plot <- df |>
+    dplyr::filter(p.adjust > min_alpha,
+                  regulation == "upregulated") |>
+    dplyr::mutate(pathway = str_replace(pathway, str_pattern, "")) |>
+    group_by(coefficient) |>
+    slice_max(abs(NES), n=n) |>
+    ggplot(aes(x=reorder_within(pathway, -NES, coefficient), y=abs(NES), group = regulation)) +
+    geom_col(fill = "red") +
+    scale_x_reordered() +
+    facet_wrap(~coefficient,
+               scales = 'free_x',
+               nrow = 1) +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle=45, hjust=1, size = 8)) +
+    labs(x = "pathway",
+         y = "|NES|",
+         title = "Upregulated Pathways") +
+    coord_flip()
+  
+  down_plot <- df |>
+    dplyr::filter(p.adjust > min_alpha,
+                  regulation == "downregulated") |>
+    dplyr::mutate(pathway = str_replace(pathway, str_pattern, "")) |>
+    group_by(coefficient) |>
+    slice_max(abs(NES), n=n) |>
+    ggplot(aes(x=reorder_within(pathway, -NES, coefficient), y=abs(NES), group = regulation)) +
+    geom_col(fill = "blue") +
+    scale_x_reordered() +
+    facet_wrap(~coefficient,
+               scales = 'free_x',
+               nrow = 1) +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle=45, hjust=1, size = 8)) +
+    labs(x = "pathway",
+         y = "|NES|",
+         title = "Downregulated Pathways") +
+    coord_flip()
+  return(list(up_plot, down_plot))
 }

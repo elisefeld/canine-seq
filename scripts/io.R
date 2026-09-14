@@ -65,5 +65,3 @@ prep_samples <- function(sample_sheet_path) {
     stop("Sample sheet ", sample_sheet_path, " does not exist.")
   }
 }
-
-

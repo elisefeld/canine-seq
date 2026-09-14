@@ -15,8 +15,20 @@ editor_options:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = TRUE)
 setwd("D:/canine-seq")
-source("scripts/functions.R")
+source("scripts/io.R")
+source("scripts/counts.R")
+source("scripts/model.R")
+```
 
+# Overview
+
+This report analyzes longitudinal bulk RNA sequencing data from lymph node fine-needle aspirate samples collected from dogs with lymphoma (n = 2) enrolled in the ORBIT study. Samples were obtained at baseline (day 0) and after treatment with Vesicular Stomatitis Virus (VSV) at 3, 7, 10, 28, and 49 days. Data were obtained from kallisto pseudoalignment against the CanFam4 (UU_Cfam_GSD_1.0) transcriptome. The goal of this analysis is to assess changes in gene expression over time after treatment with VSV.
+
+# Setup
+
+This section loads all required packages, defines parameters used for analysis, and imports the data sets used throughout the workflow. The packages tidyverse, stringr and kableExtra are used for data processing and visualization. The Bioconductor packages rtracklayer, tximport, DESeq2, Glimma, apeglm, msigdbr, and clusterProfiler are used for data import, differential expression analysis (DEA), and gene set enrichment analysis (GSEA). 
+
+```{r}
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
 }
@@ -44,6 +56,12 @@ library(patchwork)
 conflict_prefer("select", "clusterProfiler")
 ```
 
+### Parameters
+
+- `min_samples and min_count`: In order to be included, genes must detected at a count greater than or equal to than min_count in at least min_samples. 
+- `min_alpha`: Adjusted p-value threshold used to define statistical significance.
+- `min_logfold`: Absolute log2 fold-change threshold used to define meaningful changes in gene expression.
+
 ```{r}
 min_samples <- 2
 min_count <- 10
@@ -52,131 +70,86 @@ min_logfold <- 0.5
 ```
 
 ```{r}
-count_txt <- "D:/canine-seq/runs/run_ORBIT_updatedref_new/results/featurecounts/counts.txt"
+fc_path <- "D:/canine-seq/runs/run_ORBIT_updatedref_new/results/featurecounts/counts.txt"
 sample_sheet_path <- "D:/canine-seq/data/ORBIT/sample_sheet.csv"
-#homolog_path <- "D:/canine-seq/data/reference/Canis_lupus_familiarisgsd_UU_Cfam_GSD_1.0_116/Canis_lupus_familiaris-GCA_011100685.1-2021_03-homology.tsv"
-#gtf_path <- "D:/canine-seq/data/reference/Canis_lupus_familiarisgsd_UU_Cfam_GSD_1.0_custom/genes.gtf.gz"
 ```
 
+### Data Import
 
 ```{r}
 sample_sheet <- prep_samples(sample_sheet_path)
-counts <- read.table(count_txt, sep = "\t", header = TRUE, stringsAsFactors = FALSE)
-
-
-clean_sample_id <- function(x) {
-  x |>
-    str_remove("^runs\\.run_ORBIT_updatedref_new\\.results.sort\\.") |>
-    str_remove("_sorted\\.bam$") |>
-    str_replace("ORv.", "ORv-") |>
-    str_replace("([A-Z]+).([A-Z]+)$", "\\1-\\2") |>
-    str_replace("Pre.TX", "Pre-TX")
-}
-
-counts_df <- counts |>
-  as.data.frame() |>
-  select(Geneid, starts_with("runs")) |>
-  dplyr::rename(gene_id = Geneid) |>
-  pivot_longer(cols = starts_with("runs"),
-               names_to = "sample_id",
-               values_to = "count") |>
-  dplyr::mutate(sample_id = clean_sample_id(sample_id)) |>
-  left_join(sample_sheet, by = "sample_id") |>
-  dplyr::distinct(gene_id, sample_id, .keep_all = TRUE) |>
-  arrange(subject, time)
-
-count_matrix <- counts_df |>
-  select(gene_id, sample_id, count) |>
-  pivot_wider(names_from = sample_id,
-              values_from = count) |>
-  column_to_rownames("gene_id")
-  
+count_matrix <- import_feature_counts(fc_path, sample_ids = sample_sheet$sample_id)
+count_df <- count_matrix_to_df(count_matrix, sample_sheet)
 ```
 
+### Sample Overview
 
-```{r}
-dds <- run_model(count_matrix,
-                 sample_sheet,
-                 design = ~ subject + time,
-                 reduced = ~ subject,
-                 test = "LRT",
-                 min_count = min_count,
-                 min_samples = min_samples,
-                 type = "matrix")
-```
+The table below summarizes the samples included in this analysis, including subject identifiers, time, batch, and clinical information.
 
-```{r}
-glimmaMDS(dds)
-```
-
-```{r}
-df_non_shrunk <- extract_coefs(dds, hastx2gene = FALSE, min_alpha = min_alpha, min_logfold = min_logfold, shrink = FALSE)
-df_shrunk <- extract_coefs(dds,  hastx2gene = FALSE, min_alpha = min_alpha, min_logfold = min_logfold, shrink = TRUE)
-
-df <- df_shrunk
-
-sym_to_entrez <- bitr(unique(df$gene_id), fromType='SYMBOL', toType='ENTREZID', OrgDb="org.Hs.eg.db")
-df <- df |>
-  left_join(sym_to_entrez, by = c("gene_id" = "SYMBOL"))
-
-df_filter <- df |>
-  dplyr::filter(regulation != "nonDE",
-                coefficient != "subject_2_vs_1")
-                #coefficient != "time_49_vs_0",
-                #coefficient != "time_10_vs_0") # removing time 10 and 49 because there is only one subject for them
-
-df_subject <- df |>
-  dplyr::filter(regulation != "nonDE",
-                coefficient == "subject_2_vs_1")
-```
-
-```{r}
-glimmaMA(dds, groups = colData(dds)$time)
-glimmaVolcano(dds, groups = colData(dds)$time)
-```
-
-
-#### Before lfcShrink
-```{r}
-df_non_shrunk |>
-  mutate(sig = padj < min_alpha & abs(log2FoldChange) > min_logfold) |>
-  group_by(coefficient) |>
-  summarise(DE_genes = sum(sig),
-            Up = sum(sig & log2FoldChange > 0),
-            Down = sum(sig & log2FoldChange < 0)) |>
-  arrange(coefficient) |>
-   kbl(col.names = c("Coefficient", "Number of DE Genes", "Upregulated", "Downregulated"),
-      format.args = list(big.mark = ","),
-      row.names = FALSE) |>
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
-  scroll_box(width = "100%", height = "50%")
-```
-
-#### After lfcShrink
 ```{r echo = FALSE}
-df_shrunk |>
-  mutate(sig = padj < min_alpha & abs(log2FoldChange) > min_logfold) |>
-  group_by(coefficient) |>
-  summarise(DE_genes = sum(sig),
-            Up = sum(sig & log2FoldChange > 0),
-            Down = sum(sig & log2FoldChange < 0)) |>
-  arrange(coefficient) |>
-   kbl(col.names = c("Coefficient", "Number of DE Genes", "Upregulated", "Downregulated"),
-      format.args = list(big.mark = ","),
+sample_sheet |>
+  dplyr::select(subject, time, batch, sex, breed, age, cancer_type) |>
+  kbl(col.names = c("Subject",
+                    "Time",
+                    "Batch",
+                    "Sex",
+                    "Breed",
+                    "Age",
+                    "Cancer Type"),
       row.names = FALSE) |>
+  collapse_rows(columns = 1, valign = "top") |>
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
   scroll_box(width = "100%", height = "50%")
 ```
 
+# Differential Expression
 
+Differential expression analysis was performed to identify genes whose expression changed during treatment while accounting for baseline differences between individual dogs.
 
-#### Differentially Expressed Genes (abs(log2FC) > 1) (non-shrunk data)
+### Model Fitting
+
+A likelihood ratio test (LRT) was used to evaluate whether gene expression varies across time points. 
+The full model `~ subject + time` includes both subject-specific effects and temporal effects. A reduced model containing only subject effects `~ subject` was compared against the full model. Genes with significant improvement in model fit after inclusion of the time term are considered temporally regulated.
+
 ```{r}
-df_filter |>
-  dplyr::select(coefficient, regulation, gene_id, padj, log2FoldChange) |>
-  dplyr::filter(abs(log2FoldChange) > 1) |>
-  arrange(coefficient, regulation, log2FoldChange, padj) |>
-    kbl(col.names = c("Coefficient", "Regulation", "Dog Gene ID", "Adjusted p-value", "Log2 Fold-Change"),
+dds <- create_dds(count_matrix, sample_sheet, design = ~ subject + time, source = "matrix")
+dds <- run_model(dds, min_count, min_samples, test = "LRT", reduced = ~ subject)
+``` 
+
+## Quality Control 
+
+
+### Raw Count Distribution
+
+The distribution of raw gene counts for each sample is visualized below. DESeq2 assumes that counts follow a negative binomial distribution. RNA-seq count data are typically right-skewed, with many genes exhibiting low or no expression and a smaller number of highly expressed genes. Samples should also have similar overall distributions. Major differences between samples may indicate issues with sequencing or sample quality.
+
+```{r echo = FALSE}
+count_df |>
+  ggplot() +
+  geom_histogram(aes(x = log2(count + 1)), position = "identity", bins = 200) +
+    facet_grid(rows = vars(subject),
+             cols = vars(time), labeller = label_both) +
+  theme_classic() +
+  labs(x = "log2(count + 1)",
+       y = "frequency")
+```
+
+### Counts per Sample
+
+Normalized counts generated by DESeq2 were compared with raw counts to determine the effectivenes of normalization and to identify differences in sequencing depth across samples. The table below summarizes count statistics before and after normalization.
+
+```{r echo = FALSE, message = FALSE}
+counts <- merge_counts(count_matrix, dds, sample_sheet)
+
+counts |>
+  group_by(subject, time, normalized) |>
+   dplyr::summarize(total_count = sum(count, na.rm =TRUE),
+                    mean_count = mean(count, na.rm =TRUE),
+                    sd_count = sd(count, na.rm =TRUE),
+                    max_count = max(count, na.rm =TRUE),
+                    num_genes = sum(count > 0, na.rm =TRUE))|>
+  arrange(subject, time) |>
+  kbl(col.names = c("Subject", "Time", "Normalized", "Total Count", "Mean Count", "Standard Deviation", "Max Count", "Number of Genes"),
       format.args = list(big.mark = ","),
       row.names = FALSE) |>
   collapse_rows(columns = c(1,2), valign = "top") |>
@@ -184,85 +157,40 @@ df_filter |>
   scroll_box(width = "100%", height = "50%")
 ```
 
-# Over-Representation Analysis
-```{r eval = FALSE}
-library("org.Cf.eg.db")
-
-df_filter_up <- df_filter |>
-  dplyr::filter(regulation == "upregulated")
-
-df_filter_down <- df_filter |>
-  dplyr::filter(regulation == "downregulated")
-
-ego_up <- enrichGO(gene= df_filter_up$ENTREZID,
-                OrgDb= org.Hs.eg.db,
-                keyType = "ENTREZID",
-                ont= "BP",
-                universe=df$entrez_id)
-
-s_ego_up <-clusterProfiler::simplify(ego_up)
-
-ego_up |>
-  as.data.frame()
-
-dotplot(s_ego_up,showCategory=20,font.size=10,label_format=70)+
-  scale_size_continuous(range=c(1, 7))+
-  theme_minimal() +
-  ggtitle("GO Enrichment of up-regulated genes")
-
-
-ego_down <- enrichGO(gene= df_filter_down$ENTREZID,
-                OrgDb= org.Hs.eg.db,
-                keyType = "ENTREZID",
-                ont= "BP",
-                universe=df$entrez_id)
-
-s_ego_down <-clusterProfiler::simplify(ego_down)
-
-dotplot(s_ego_down,showCategory=20,font.size=10,label_format=70)+
-  scale_size_continuous(range=c(1, 7))+
-  theme_minimal() +
-  ggtitle("GO Enrichment of down-regulated genes")
+Similar distributions following normalization suggest that differences in sequencing depth have been corrected. The normalized gene counts are smaller because DESeq2 filters out genes with low counts. 
+```{r echo = FALSE}
+counts |>
+  ggplot(aes(x = time, y = log2(count + 1), fill = subject)) +
+  geom_boxplot() +
+  facet_wrap(~normalized, labeller = label_both) +
+  theme_classic()
 ```
 
-# Clustering
-```{r}
-rld <- rlog(dds, blind = TRUE)
-rld_mat <- assay(rld)
-cluster_rlog <- rld_mat[df_filter$gene_id, ]
-# Use the `degPatterns` function from the 'DEGreport' package to show gene clusters across sample groups
+### Multidimensional Scaling (MDS)
 
-clusters <- degPatterns(cluster_rlog, metadata = sample_sheet, time = "time", col = NULL)
-#clusters <- degPatterns(cluster_rlog, metadata = sample_sheet, time = "time", col = "subject")
-
-cluster_df <- clusters$df |>
-  distinct()
-```
-
-# Gene Set Enrichment
+A multidimensional scaling plot shows relationships between samples. Samples clustering by subject indicate differences in expression between dogs, while clustering by time point may suggest changes in expression because of the treatment. In this case, subject appears to explain most of the variance.
 
 ```{r}
-#msigdbr_collections()
-
-df_hallmark <- run_gsea(dds, df, collection = "H")
-df_kegg <- run_gsea(dds, df, collection = "C2", subcollection = "CP:KEGG_MEDICUS")
-df_onco_sig <- run_gsea(dds, df, collection = "C6")
-
-#df_immune <- run_gsea(dds, df, collection = "C7", subcollection = "IMMUNESIGDB")
-#df_react <- run_gsea(dds, df, collection = "C2", subcollection = "CP:REACTOME")
-#df_gobp <- run_gsea(dds, df, collection = "C5", subcollection = "GO:BP")
+glimmaMDS(dds)
 ```
 
-```{r, fig.width=12,fig.height=12}
-kegg_plots <- plot_gsea(df_kegg, str_pattern = "KEGG_MEDICUS_", n = 3)
-(kegg_plots[[1]] / kegg_plots[[2]]) + plot_layout(axes = "collect", axis_titles = "collect")
+### Dispersion Estimation
 
-hallmark_plots <- plot_gsea(df_hallmark, str_pattern = "HALLMARK_", n = 3)
-(hallmark_plots[[1]] / hallmark_plots[[2]]) + plot_layout(axes = "collect", axis_titles = "collect")
+DESeq2 models the relationship between gene expression mean and variability using gene-wise dispersion estimates. The black points represent dispersion estimates for each gene. DESeq2 adjusts these estimates based on the fitted curve (red), resulting in shrunken dispersion estimates (blue). Systematic deviations of the dispersion estimates from the fitted curve may indicate outliers.
 
-onco_sig_plots <- plot_gsea(df_onco_sig, str_pattern = " ", n = 3)
-(onco_sig_plots[[1]] / onco_sig_plots[[2]]) + plot_layout(axes = "collect", axis_titles = "collect")
+```{R}
+plotDispEsts(dds)
 ```
 
+### Log Fold-Change Shrinkage
 
+DESeq2 estimates log2 Fold-Change values for each gene to describe the effect size. However, these estimates can be inflated in genes with small counts. The apeglm shrinkage method reduces noise in fold-change estimates while preserving large biologically meaningful effects.
+
+```{r echo = FALSE}
+res <- results(dds)
+plotMA(res, alpha = 0.1, ylim = c(-2, 2), cex = 1.5, main = "MA-plot before LFC shrinkage")
+
+resLFC <- lfcShrink(dds, coef = "time_49_vs_0", type = "apeglm")
+plotMA(resLFC, alpha = 0.1, ylim = c(-2, 2), cex = 1.5, main = "MA-plot after LFC shrinkage")
+```
 

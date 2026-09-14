@@ -1,0 +1,268 @@
+---
+title: "Longitudinal Bulk RNA-Seq Analysis of Canine Lymphoma Samples"
+author: "Elise Hachfeld"
+output: 
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+date: "2026-09-08"
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = TRUE)
+setwd("D:/canine-seq")
+source("scripts/functions.R")
+
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+
+#BiocManager::install(c("tidyverse","stringr","kableExtra","rtracklayer","tximport","DESeq2","Glimma","apeglm","msigdbr","clusterProfiler", "DEGreport"))
+
+#install.packages("tidytext")
+
+library(tidyverse)
+library(stringr)
+library(kableExtra)
+library(rtracklayer)
+library(tximport)
+library(DESeq2)
+library(Glimma)
+library(apeglm)
+library(msigdbr)
+library(clusterProfiler)
+library(DEGreport)
+library(tidytext)
+library(org.Hs.eg.db)
+library(conflicted)
+library(patchwork)
+
+conflict_prefer("select", "clusterProfiler")
+```
+
+```{r}
+min_samples <- 2
+min_count <- 10
+min_alpha <- 0.05
+min_logfold <- 0.5
+```
+
+```{r}
+count_txt <- "D:/canine-seq/runs/run_ORBIT_updatedref_new/results/featurecounts/counts.txt"
+sample_sheet_path <- "D:/canine-seq/data/ORBIT/sample_sheet.csv"
+#homolog_path <- "D:/canine-seq/data/reference/Canis_lupus_familiarisgsd_UU_Cfam_GSD_1.0_116/Canis_lupus_familiaris-GCA_011100685.1-2021_03-homology.tsv"
+#gtf_path <- "D:/canine-seq/data/reference/Canis_lupus_familiarisgsd_UU_Cfam_GSD_1.0_custom/genes.gtf.gz"
+```
+
+
+```{r}
+sample_sheet <- prep_samples(sample_sheet_path)
+counts <- read.table(count_txt, sep = "\t", header = TRUE, stringsAsFactors = FALSE)
+
+
+clean_sample_id <- function(x) {
+  x |>
+    str_remove("^runs\\.run_ORBIT_updatedref_new\\.results.sort\\.") |>
+    str_remove("_sorted\\.bam$") |>
+    str_replace("ORv.", "ORv-") |>
+    str_replace("([A-Z]+).([A-Z]+)$", "\\1-\\2") |>
+    str_replace("Pre.TX", "Pre-TX")
+}
+
+counts_df <- counts |>
+  as.data.frame() |>
+  select(Geneid, starts_with("runs")) |>
+  dplyr::rename(gene_id = Geneid) |>
+  pivot_longer(cols = starts_with("runs"),
+               names_to = "sample_id",
+               values_to = "count") |>
+  dplyr::mutate(sample_id = clean_sample_id(sample_id)) |>
+  left_join(sample_sheet, by = "sample_id") |>
+  dplyr::distinct(gene_id, sample_id, .keep_all = TRUE) |>
+  arrange(subject, time)
+
+count_matrix <- counts_df |>
+  select(gene_id, sample_id, count) |>
+  pivot_wider(names_from = sample_id,
+              values_from = count) |>
+  column_to_rownames("gene_id")
+  
+```
+
+
+```{r}
+dds <- run_model(count_matrix,
+                 sample_sheet,
+                 design = ~ subject + time,
+                 reduced = ~ subject,
+                 test = "LRT",
+                 min_count = min_count,
+                 min_samples = min_samples,
+                 type = "matrix")
+```
+
+```{r}
+glimmaMDS(dds)
+```
+
+```{r}
+df_non_shrunk <- extract_coefs(dds, hastx2gene = FALSE, min_alpha = min_alpha, min_logfold = min_logfold, shrink = FALSE)
+df_shrunk <- extract_coefs(dds,  hastx2gene = FALSE, min_alpha = min_alpha, min_logfold = min_logfold, shrink = TRUE)
+
+df <- df_shrunk
+
+sym_to_entrez <- bitr(unique(df$gene_id), fromType='SYMBOL', toType='ENTREZID', OrgDb="org.Hs.eg.db")
+df <- df |>
+  left_join(sym_to_entrez, by = c("gene_id" = "SYMBOL"))
+
+df_filter <- df |>
+  dplyr::filter(regulation != "nonDE",
+                coefficient != "subject_2_vs_1")
+                #coefficient != "time_49_vs_0",
+                #coefficient != "time_10_vs_0") # removing time 10 and 49 because there is only one subject for them
+
+df_subject <- df |>
+  dplyr::filter(regulation != "nonDE",
+                coefficient == "subject_2_vs_1")
+```
+
+```{r}
+glimmaMA(dds, groups = colData(dds)$time)
+glimmaVolcano(dds, groups = colData(dds)$time)
+```
+
+
+#### Before lfcShrink
+```{r}
+df_non_shrunk |>
+  mutate(sig = padj < min_alpha & abs(log2FoldChange) > min_logfold) |>
+  group_by(coefficient) |>
+  summarise(DE_genes = sum(sig),
+            Up = sum(sig & log2FoldChange > 0),
+            Down = sum(sig & log2FoldChange < 0)) |>
+  arrange(coefficient) |>
+   kbl(col.names = c("Coefficient", "Number of DE Genes", "Upregulated", "Downregulated"),
+      format.args = list(big.mark = ","),
+      row.names = FALSE) |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
+  scroll_box(width = "100%", height = "50%")
+```
+
+#### After lfcShrink
+```{r echo = FALSE}
+df_shrunk |>
+  mutate(sig = padj < min_alpha & abs(log2FoldChange) > min_logfold) |>
+  group_by(coefficient) |>
+  summarise(DE_genes = sum(sig),
+            Up = sum(sig & log2FoldChange > 0),
+            Down = sum(sig & log2FoldChange < 0)) |>
+  arrange(coefficient) |>
+   kbl(col.names = c("Coefficient", "Number of DE Genes", "Upregulated", "Downregulated"),
+      format.args = list(big.mark = ","),
+      row.names = FALSE) |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
+  scroll_box(width = "100%", height = "50%")
+```
+
+
+
+#### Differentially Expressed Genes (abs(log2FC) > 1) (non-shrunk data)
+```{r}
+df_filter |>
+  dplyr::select(coefficient, regulation, gene_id, padj, log2FoldChange) |>
+  dplyr::filter(abs(log2FoldChange) > 1) |>
+  arrange(coefficient, regulation, log2FoldChange, padj) |>
+    kbl(col.names = c("Coefficient", "Regulation", "Dog Gene ID", "Adjusted p-value", "Log2 Fold-Change"),
+      format.args = list(big.mark = ","),
+      row.names = FALSE) |>
+  collapse_rows(columns = c(1,2), valign = "top") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), fixed_thead = T) |>
+  scroll_box(width = "100%", height = "50%")
+```
+
+# Over-Representation Analysis
+```{r eval = FALSE}
+library("org.Cf.eg.db")
+
+df_filter_up <- df_filter |>
+  dplyr::filter(regulation == "upregulated")
+
+df_filter_down <- df_filter |>
+  dplyr::filter(regulation == "downregulated")
+
+ego_up <- enrichGO(gene= df_filter_up$ENTREZID,
+                OrgDb= org.Hs.eg.db,
+                keyType = "ENTREZID",
+                ont= "BP",
+                universe=df$entrez_id)
+
+s_ego_up <-clusterProfiler::simplify(ego_up)
+
+ego_up |>
+  as.data.frame()
+
+dotplot(s_ego_up,showCategory=20,font.size=10,label_format=70)+
+  scale_size_continuous(range=c(1, 7))+
+  theme_minimal() +
+  ggtitle("GO Enrichment of up-regulated genes")
+
+
+ego_down <- enrichGO(gene= df_filter_down$ENTREZID,
+                OrgDb= org.Hs.eg.db,
+                keyType = "ENTREZID",
+                ont= "BP",
+                universe=df$entrez_id)
+
+s_ego_down <-clusterProfiler::simplify(ego_down)
+
+dotplot(s_ego_down,showCategory=20,font.size=10,label_format=70)+
+  scale_size_continuous(range=c(1, 7))+
+  theme_minimal() +
+  ggtitle("GO Enrichment of down-regulated genes")
+```
+
+# Clustering
+```{r}
+rld <- rlog(dds, blind = TRUE)
+rld_mat <- assay(rld)
+cluster_rlog <- rld_mat[df_filter$gene_id, ]
+# Use the `degPatterns` function from the 'DEGreport' package to show gene clusters across sample groups
+
+clusters <- degPatterns(cluster_rlog, metadata = sample_sheet, time = "time", col = NULL)
+#clusters <- degPatterns(cluster_rlog, metadata = sample_sheet, time = "time", col = "subject")
+
+cluster_df <- clusters$df |>
+  distinct()
+```
+
+# Gene Set Enrichment
+
+```{r}
+#msigdbr_collections()
+
+df_hallmark <- run_gsea(dds, df, collection = "H")
+df_kegg <- run_gsea(dds, df, collection = "C2", subcollection = "CP:KEGG_MEDICUS")
+df_onco_sig <- run_gsea(dds, df, collection = "C6")
+
+#df_immune <- run_gsea(dds, df, collection = "C7", subcollection = "IMMUNESIGDB")
+#df_react <- run_gsea(dds, df, collection = "C2", subcollection = "CP:REACTOME")
+#df_gobp <- run_gsea(dds, df, collection = "C5", subcollection = "GO:BP")
+```
+
+```{r, fig.width=12,fig.height=12}
+kegg_plots <- plot_gsea(df_kegg, str_pattern = "KEGG_MEDICUS_", n = 3)
+(kegg_plots[[1]] / kegg_plots[[2]]) + plot_layout(axes = "collect", axis_titles = "collect")
+
+hallmark_plots <- plot_gsea(df_hallmark, str_pattern = "HALLMARK_", n = 3)
+(hallmark_plots[[1]] / hallmark_plots[[2]]) + plot_layout(axes = "collect", axis_titles = "collect")
+
+onco_sig_plots <- plot_gsea(df_onco_sig, str_pattern = " ", n = 3)
+(onco_sig_plots[[1]] / onco_sig_plots[[2]]) + plot_layout(axes = "collect", axis_titles = "collect")
+```
+
+
+

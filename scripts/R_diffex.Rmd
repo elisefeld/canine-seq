@@ -73,12 +73,11 @@ kallisto_path <- "D:/canine-seq/runs/run_ORBIT_canfam4/results/kallisto"
 homolog_path <- "D:/canine-seq/data/reference/Canis_lupus_familiarisgsd_UU_Cfam_GSD_1.0_116/Canis_lupus_familiaris-GCA_011100685.1-2021_03-homology.tsv"
 mayo_gene_counts <- "D:/mayo_results/merged_gene_counts.txt"
 ```
-
 ### Data Import
 
 ```{r}
 sample_sheet <- prep_samples(sample_sheet_path)
-tx2gene <- prep_tx2gene(gtf_path)
+tx2gene <- prep_tx2gene(gtf_path, homolog_path)
 txi <- prep_kallisto(kallisto_path, tx2gene, sample_sheet)
 counts <- process_counts(txi$counts, sample_sheet, tx2gene)
 abundance <- process_counts(txi$abundance, sample_sheet, tx2gene)
@@ -396,6 +395,7 @@ onco_sig_plots <- plot_gsea(df_onco_sig, str_pattern = " ", n = 3)
 library(dendextend)
 test <- counts_norm |>
   dplyr::select(gene_id, count, subject, time) |>
+  dplyr::filter(gene_id %in% df_filter$gene_id) |>
   group_by(gene_id, time) |>
   summarize(mean_count = mean(count)) |>
   pivot_wider(names_from = gene_id,
@@ -414,10 +414,10 @@ dend <- as.dendrogram(test.tree)
 clusters <- cutree(dend, k=4)
 table(clusters)
 
-plot(color_branches(dend, k=20),leaflab="none")
+plot(color_branches(dend, k=3),leaflab="none")
 
 
-clusters <- cutree(dend, k=4)
+clusters <- cutree(dend, k=20)
 clusters.df <- data.frame(gene = names(clusters), cluster = clusters) |>
   left_join(tx2gene, by = c("gene" = "gene_id")) |>
   select(-transcript_id) |>

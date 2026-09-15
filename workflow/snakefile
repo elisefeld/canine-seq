@@ -113,8 +113,8 @@ rule cram_to_fastq:
     input: 
         sorted_cram=f'{RESULTS_DIR}/sort/{{sample}}.cram',
     output:
-        read1=temp(f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz'),
-        read2=temp(f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz')
+        R1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        R2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     threads: 
         config['threads']['samtools']
     log:
@@ -124,16 +124,16 @@ rule cram_to_fastq:
         echo 'Extracting FASTQ files from {input.sorted_cram}...'
         samtools fastq \
         -@ {threads} \
-        -1 {output.read1} \
-        -2 {output.read2} \
+        -1 {output.R1} \
+        -2 {output.R2} \
         {input.sorted_cram} \
         &> {log}
         '''
 
 rule fastqc:
     input:
-        read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
-        read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
+        R1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        R2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
         R1=multiext(f'{RESULTS_DIR}/fastqc/pre_trim/{{sample}}_R1_fastqc','.html','.zip'),
         R2=multiext(f'{RESULTS_DIR}/fastqc/pre_trim/{{sample}}_R2_fastqc','.html','.zip')
@@ -145,21 +145,21 @@ rule fastqc:
         out_dir=f'{RESULTS_DIR}/fastqc/pre_trim'
     shell:
         '''
-        echo 'Running a quality control report for {input.read1} and {input.read2}...'
+        echo 'Running a quality control report for {input.R1} and {input.R2}...'
         fastqc -o {params.out_dir} \
          -t {threads} \
-         {input.read1} \
-         {input.read2} \
+         {input.R1} \
+         {input.R2} \
          &> {log}
         '''
 
 rule fastp_trim:
     input:
-        read1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
-        read2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
+        R1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        R2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
+        trimmed_R1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_R2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
         html=f'{RESULTS_DIR}/fastp/{{sample}}.html',
         json=f'{RESULTS_DIR}/fastp/{{sample}}.json'
     threads:
@@ -168,13 +168,13 @@ rule fastp_trim:
         f'{LOGS_DIR}/fastp/{{sample}}_fastp.log'
     shell:
         '''
-        echo 'Trimming reads for {input.read1} and {input.read2}...'
+        echo 'Trimming reads for {input.R1} and {input.R2}...'
         fastp -V \
         --thread {threads} \
-         -o {output.trimmed_read1} \
-         -O {output.trimmed_read2} \
-         -i {input.read1} \
-         -I {input.read2} \
+         -o {output.trimmed_R1} \
+         -O {output.trimmed_R2} \
+         -i {input.R1} \
+         -I {input.R2} \
          -h {output.html} \
          -j {output.json} \
          &> {log}
@@ -182,8 +182,8 @@ rule fastp_trim:
 
 rule fastqc_trimmed:
     input:
-        read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz'
+        R1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        R2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz'
     output:
         R1=multiext(f'{RESULTS_DIR}/fastqc/post_trim/{{sample}}_R1_trimmed_fastqc','.html','.zip'),
         R2=multiext(f'{RESULTS_DIR}/fastqc/post_trim/{{sample}}_R2_trimmed_fastqc','.html','.zip')
@@ -195,11 +195,11 @@ rule fastqc_trimmed:
         out_dir=f'{RESULTS_DIR}/fastqc/post_trim'
     shell:
         '''
-        echo 'Running a quality control report for {input.read1} and {input.read2}...'
+        echo 'Running a quality control report for {input.R1} and {input.R2}...'
         fastqc -o {params.out_dir} \
          -t {threads} \
-         {input.read1} \
-         {input.read2} \
+         {input.R1} \
+         {input.R2} \
          &> {log}
         '''
 
@@ -227,8 +227,8 @@ rule kallisto_index:
 rule kallisto_quant:
     input:
         idx=f'{CDNA}.idx',
-        trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
+        trimmed_R1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_R2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
     output:
         abundance=multiext(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance','.tsv','.h5'),
         json=f'{RESULTS_DIR}/kallisto/{{sample}}/run_info.json'
@@ -240,12 +240,12 @@ rule kallisto_quant:
         config['threads']['kallisto']
     shell:
         '''
-        echo 'Running kallisto pseudoalignment for {input.trimmed_read1} and {input.trimmed_read2}'
+        echo 'Running kallisto pseudoalignment for {input.trimmed_R1} and {input.trimmed_R2}'
         kallisto quant -i {input.idx} \
          -o {params.out_dir} \
          -t {threads} \
-         {input.trimmed_read1} \
-         {input.trimmed_read2} \
+         {input.trimmed_R1} \
+         {input.trimmed_R2} \
          &> {log}
         '''
 
@@ -294,8 +294,8 @@ rule hisat2_align:
             '.6.ht2',
             '.7.ht2',
             '.8.ht2'),
-        trimmed_read1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        trimmed_read2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
+        trimmed_R1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_R2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
     threads:
         config['threads']['hisat2']
     output:
@@ -306,11 +306,11 @@ rule hisat2_align:
         index_base=f'{FASTA}'
     shell:
         '''
-        echo 'Running HISAT2 alignment for {input.trimmed_read1} and {input.trimmed_read2}'
+        echo 'Running HISAT2 alignment for {input.trimmed_R1} and {input.trimmed_R2}'
         hisat2 -x {params.index_base} \
         --threads {threads} \
-        -1 {input.trimmed_read1} \
-        -2 {input.trimmed_read2} \
+        -1 {input.trimmed_R1} \
+        -2 {input.trimmed_R2} \
         -S {output.sam} \
         &> {log}
         '''

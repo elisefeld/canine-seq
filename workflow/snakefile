@@ -175,6 +175,7 @@ rule fastp_trim:
          -O {output.trimmed_R2} \
          -i {input.R1} \
          -I {input.R2} \
+         --detect_adapter_for_pe \
          -h {output.html} \
          -j {output.json} \
          &> {log}

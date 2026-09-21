@@ -15,14 +15,17 @@ RELEASE = config['run']['ref_release']
 
 # Directory declaration and creation
 DATA_DIR = os.path.join(config['path']['data_dir'], PROJECT) 
+VSV_DIR = os.path.join(config['path']['data_dir'], config['path']['reference_dir'], 'VSV_GCF_000850045.1')
 REF_DIR = os.path.join(config['path']['data_dir'], config['path']['reference_dir'], f'{SPECIES}_{BUILD}_{RELEASE}')
 
 RUN_DIR = os.path.join(config['path']['run_dir'], config['run']['run_name'])
 RESULTS_DIR = os.path.join(RUN_DIR, config['path']['results_dir'])
 REPORT_DIR = os.path.join(RUN_DIR, config['path']['report_dir'])
 LOGS_DIR = os.path.join(RUN_DIR, config['path']['log_dir'])
+IGV_DIR = os.path.join(RUN_DIR, 'igv')
+VIRUS_DIR = os.path.join(RUN_DIR, 'virus')
 
-dirs = [DATA_DIR, REF_DIR, RESULTS_DIR, REPORT_DIR, LOGS_DIR]
+dirs = [DATA_DIR, VSV_DIR, REF_DIR, RESULTS_DIR, REPORT_DIR, LOGS_DIR, IGV_DIR, VIRUS_DIR]
 for directory in dirs:
     os.makedirs(directory,exist_ok=True)
     print(f'Project directory \'{directory}\' created successfully', file=sys.stderr)
@@ -30,6 +33,8 @@ for directory in dirs:
 FASTA = os.path.join(REF_DIR, config['ref']['fasta'])
 GTF   = os.path.join(REF_DIR, config['ref']['gtf'])
 CDNA  = os.path.join(REF_DIR, config['ref']['cdna'])
+VSV_FASTA = os.path.join(VSV_DIR, 'GCF_000850045.1_ViralProj14673_genomic.fa')
+VSV_GTF   = os.path.join(VSV_DIR, 'genomic.gtf')
 
 # File declaration and checks
 SAMPLE_SHEET = os.path.join(DATA_DIR, config['run']['sample_sheet'])
@@ -74,7 +79,12 @@ print(f'Running analysis of {len(SAMPLES)} RNA-seq samples for {PROJECT} project
 # Declaring desired outputs for the pipeline
 rule all:
     input: 
-        report=f'{REPORT_DIR}/multiqc_report.html'
+        report=f'{REPORT_DIR}/multiqc_report.html',
+        coord_sorted_bams=expand(f'{IGV_DIR}/{{sample}}_coord_sorted.bam', sample=SAMPLES),
+        bam_indices=expand(f'{IGV_DIR}/{{sample}}_coord_sorted.bam.bai', sample=SAMPLES),
+        unmapped_bam=expand(f'{VIRUS_DIR}/unmapped/{{sample}}_unmapped.bam', sample=SAMPLES),
+        viral_bams=expand(f'{VIRUS_DIR}/sort/{{sample}}_sorted_viral.bam', sample=SAMPLES),
+        viral_counts=f'{RESULTS_DIR}/featurecounts/counts_viral.txt'
 
 ###########################
 ##### QUALITY CONTROL #####
@@ -205,53 +215,6 @@ rule fastqc_trimmed:
         '''
 
 ###########################
-##### PSEUDOALIGNMENT #####
-###########################
-rule kallisto_index:
-    input: 
-        cdna=CDNA
-    output: 
-        idx=f'{CDNA}.idx'
-    threads:
-        config['threads']['kallisto']
-    log:
-        f'{LOGS_DIR}/kallisto/index.log'
-    shell:
-        '''
-        echo 'Building kallisto index for {input.cdna}...'
-        kallisto index -i {output.idx} \
-         {input.cdna} \
-         -t {threads} \
-         &> {log}
-        '''
-
-rule kallisto_quant:
-    input:
-        idx=f'{CDNA}.idx',
-        trimmed_R1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        trimmed_R2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
-    output:
-        abundance=multiext(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance','.tsv','.h5'),
-        json=f'{RESULTS_DIR}/kallisto/{{sample}}/run_info.json'
-    params:
-        out_dir=f'{RESULTS_DIR}/kallisto/{{sample}}'
-    log: 
-        f'{LOGS_DIR}/kallisto/{{sample}}_quant.log'
-    threads:
-        config['threads']['kallisto']
-    shell:
-        '''
-        echo 'Running kallisto pseudoalignment for {input.trimmed_R1} and {input.trimmed_R2}'
-        kallisto quant -i {input.idx} \
-         -o {params.out_dir} \
-         -t {threads} \
-         {input.trimmed_R1} \
-         {input.trimmed_R2} \
-         &> {log}
-        '''
-
-
-###########################
 ######## ALIGNMENT ########
 ###########################
 rule hisat2_index:
@@ -368,6 +331,208 @@ rule feature_counts:
         &> {log}
         '''
 
+###########################
+########### IGV ###########
+###########################
+rule coord_sort_bam:
+    input:
+        bam=f'{RESULTS_DIR}/sort/{{sample}}_sorted.bam'
+    output:
+        sorted_bam=f'{IGV_DIR}/{{sample}}_coord_sorted.bam'
+    threads:
+        config['threads']['samtools']
+    log:
+        f'{LOGS_DIR}/samtools_sort/{{sample}}_coordsort.log'
+    shell:
+        '''
+        echo 'Sorting {input.bam} by coordinate...'
+        samtools sort -@ {threads} \
+        -o {output.sorted_bam} \
+        {input.bam} \
+        &> {log}
+        '''
+
+rule index_bam:
+    input:
+        bam=f'{IGV_DIR}/{{sample}}_coord_sorted.bam'
+    output:
+        bai=f'{IGV_DIR}/{{sample}}_coord_sorted.bam.bai'
+    threads:
+        config['threads']['samtools']
+    log:
+        f'{LOGS_DIR}/samtools_index/{{sample}}_index.log'
+    shell:
+        '''
+        echo 'Indexing {input.bam}...'
+        samtools index -@ {threads} \
+        {input.bam} \
+        &> {log}
+        '''
+
+###########################
+##### VIRAL DETECTION #####
+###########################
+rule extract_unmapped_reads:
+    input:
+        bam=f'{RESULTS_DIR}/sort/{{sample}}_sorted.bam'
+    output:
+        unmapped_bam=f'{VIRUS_DIR}/unmapped/{{sample}}_unmapped.bam'
+    threads:
+        config['threads']['samtools']
+    log:
+        f'{LOGS_DIR}/samtools_extract/{{sample}}_extract.log'
+    shell:
+        '''
+        echo 'Extracting unmapped reads from {input.bam}...'
+        samtools view -b -f 12 \
+        -@ {threads} \
+        {input.bam} \
+        > {output.unmapped_bam} \
+        &> {log}
+        '''
+
+rule name_sort_viral_bam:
+    input:
+        bam=f'{VIRUS_DIR}/unmapped/{{sample}}_unmapped.bam'
+    output:
+        sorted_bam=temp(f'{VIRUS_DIR}/sort/{{sample}}_sorted_viral.bam')
+    threads:
+        config['threads']['samtools']
+    log:
+        f'{LOGS_DIR}/samtools_sort/{{sample}}_name_sort_viral.log'
+    shell:
+        '''
+        echo 'Sorting {input.bam} by name...'
+        samtools sort -n \
+        -@ {threads} \
+        -o {output.sorted_bam} \
+        {input.bam} \
+        &> {log}
+        '''
+
+rule bam_to_fastq:
+    input: 
+        sorted_bam=f'{VIRUS_DIR}/sort/{{sample}}_sorted_viral.bam',
+    output:
+        R1=f'{VIRUS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        R2=f'{VIRUS_DIR}/fastq/{{sample}}_R2.fastq.gz'
+    threads: 
+        config['threads']['samtools']
+    log:
+        f'{LOGS_DIR}/fastq/{{sample}}_fastq.log'
+    shell:
+        '''
+        echo 'Extracting FASTQ files from {input.sorted_bam}...'
+        samtools fastq \
+        -@ {threads} \
+        -1 {output.R1} \
+        -2 {output.R2} \
+        {input.sorted_bam} \
+        &> {log}
+        '''
+
+rule hisat2_index_viral:
+    input: 
+        fasta=VSV_FASTA
+    output: 
+        multiext(
+            VSV_FASTA,
+            '.1.ht2',
+            '.2.ht2',
+            '.3.ht2',
+            '.4.ht2',
+            '.5.ht2',
+            '.6.ht2',
+            '.7.ht2',
+            '.8.ht2')
+    threads:
+        config['threads']['hisat2']
+    params:
+        index_base=f'{VSV_FASTA}'
+    log:
+        f'{LOGS_DIR}/hisat2/index_viral.log'
+    shell:
+        '''
+        echo 'Building hisat2 index for {input.fasta}...'
+        hisat2-build  --threads {threads} \
+        {input.fasta} \
+        {params.index_base} \
+        &> {log}
+        '''
+
+rule align_viral:
+    input: 
+        multiext(
+            VSV_FASTA,
+            '.1.ht2',
+            '.2.ht2',
+            '.3.ht2',
+            '.4.ht2',
+            '.5.ht2',
+            '.6.ht2',
+            '.7.ht2',
+            '.8.ht2'),
+        R1=f'{VIRUS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        R2=f'{VIRUS_DIR}/fastq/{{sample}}_R2.fastq.gz'
+    output:
+        sam=temp(f'{VIRUS_DIR}/hisat2/{{sample}}_virus_aligned.sam')
+    threads:
+        config['threads']['hisat2']
+    log:
+        f'{LOGS_DIR}/hisat2_virus/{{sample}}_virus_align.log'
+    params:
+        index_base=f'{VSV_FASTA}'
+    shell:
+        '''
+        echo 'Aligning reads from {input.R1} and {input.R2} to viral reference...'
+        hisat2 -x {params.index_base} \
+        --threads {threads} \
+        -1 {input.R1} \
+        -2 {input.R2} \
+        -S {output.sam} \
+        &> {log}
+        '''
+
+rule sort_viral_bam:
+    input:
+        sam=f'{VIRUS_DIR}/hisat2/{{sample}}_virus_aligned.sam'
+    output:
+        sorted_bam=f'{VIRUS_DIR}/sort/{{sample}}_aligned_sorted_viral.bam'
+    threads:
+        config['threads']['samtools']
+    log:
+        f'{LOGS_DIR}/samtools_sort/{{sample}}_sortbam_viral.log'
+    shell:
+        '''
+        echo 'Sorting {input.sam} by name...'
+        samtools sort -n \
+        -@ {threads} \
+        {input.sam} \
+        -o {output.sorted_bam} \
+        &> {log}
+        '''
+rule feature_counts_viral:
+    input:
+        bams=expand(f'{VIRUS_DIR}/sort/{{sample}}_aligned_sorted_viral.bam', sample=SAMPLES),
+        gtf=VSV_GTF
+    output:
+        counts=f'{RESULTS_DIR}/featurecounts/counts_viral.txt'
+    threads:
+        config['threads']['featurecounts']
+    log:
+        f'{LOGS_DIR}/featurecounts/featurecounts_viral.log'
+    shell:
+        '''
+        echo 'Running featureCounts for {input.bams}...'
+        featureCounts -p \
+        -g gene_id \
+        -a {input.gtf} \
+        -o {output.counts} \
+        -T {threads} \
+        {input.bams} \
+        &> {log}
+        '''
+        
 ###########################
 ######### REPORT ##########
 ###########################

@@ -51,7 +51,7 @@ get_entrez_ids <- function(gene_names) {
     dplyr::mutate(alt_entrez_id = str_extract(ENTREZID, "(.*)"),
                   entrez_id = str_extract(ENTREZID, "^[^,]+")) |>
     dplyr::select(SYMBOL, entrez_id, alt_entrez_id) |>
-    dplyr::rename(SYMBOL = gene_name) 
+    dplyr::rename(gene_id = SYMBOL) 
   return(sym_to_entrez)
 }
 

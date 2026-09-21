@@ -66,33 +66,18 @@ extract_results <- function(dds) {
     dplyr::mutate(coefficient = factor(coefficient, levels = resultsNames(dds))) |>
     dplyr::rename(no = log2FoldChange,
            yes = log2FoldChange_shrunk) |>
-    pivot_longer(cols = c("log2FoldChange", "log2FoldChange_shrunk",
-                          names_to = shrunk,
-                          values_to = log2FC))
+    pivot_longer(cols = c("no", "yes"),
+                          names_to = "shrunk",
+                          values_to = "log2FoldChange") |>
+    dplyr::mutate(regulation = case_when(padj < min_alpha &
+                                           abs(log2FoldChange) > min_logfold &
+                                           log2FoldChange > 0 ~ "upregulated",
+                                         
+                                         padj < min_alpha &
+                                           abs(log2FoldChange) > min_logfold &
+                                           log2FoldChange < 0 ~ "downregulated",
+                                         
+                                         TRUE ~ "nonDE"),
+                  sig = padj < min_alpha & abs(log2FoldChange) > min_logfold)
   return(df)
-}
-
-extract_significance <- function(df,
-                                 min_alpha,
-                                 min_logfold,
-                                 filter_by = c("shrunk", "unshrunk")) {
-  filter_by <- match.arg(filter_by)
-  filter_col <- if (filter_by == "shrunk") {
-    "log2FoldChange_shrunk"
-  } else {
-    "log2FoldChange"
-  }
-  
-df <- df |>
-  dplyr::mutate(regulation = case_when(padj < min_alpha &
-                                         abs(.data[[filter_col]]) > min_logfold &
-                                         .data[[filter_col]] > 0 ~ "upregulated",
-                                       
-                                       padj < min_alpha &
-                                         abs(.data[[filter_col]]) > min_logfold &
-                                         .data[[filter_col]] < 0 ~ "downregulated",
-                                       
-                                       TRUE ~ "nonDE"),
-                sig = padj < min_alpha & abs(.data[[filter_col]]) > min_logfold)
-  
 }

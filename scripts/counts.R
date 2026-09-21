@@ -30,3 +30,16 @@ merge_counts <- function(count_matrix, dds, sample_sheet, annotation = NULL) {
     }
   return(count_df)
 }
+
+plot_gene_expression <- function(counts, gene) {
+  counts |>
+    dplyr::filter(gene_id == gene,
+                  normalized == "yes") |>
+    ggplot(aes(x = time, y = count, color = subject)) +
+    geom_point() +
+    geom_smooth(aes(group = subject), method = "loess", se = FALSE) +
+    theme_classic() +
+    labs(x = "Time (days)", 
+         y = "Normalized count",
+         title = paste(gene, "expression over time"))
+}

@@ -49,7 +49,7 @@ plot_regulation <- function(df, min_alpha, regulation_type, n, fill, title) {
     slice_max(abs(NES), n=n) |>
     ungroup() |>
       ggplot(aes(x=reorder_within(pathway, -NES, coefficient), y=abs(NES))) +
-      geom_col(fill = fill) +
+      geom_bar(fill = fill, stat = "identity") +
       scale_x_reordered() +
       facet_wrap(~coefficient,
                  scales = 'free_x',

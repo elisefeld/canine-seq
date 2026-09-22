@@ -83,8 +83,12 @@ rule all:
         coord_sorted_bams=expand(f'{IGV_DIR}/{{sample}}_coord_sorted.bam', sample=SAMPLES),
         bam_indices=expand(f'{IGV_DIR}/{{sample}}_coord_sorted.bam.bai', sample=SAMPLES),
         unmapped_bam=expand(f'{VIRUS_DIR}/unmapped/{{sample}}_unmapped.bam', sample=SAMPLES),
-        viral_bams=expand(f'{VIRUS_DIR}/sort/{{sample}}_sorted_viral.bam', sample=SAMPLES),
-        viral_counts=f'{RESULTS_DIR}/featurecounts/counts_viral.txt'
+        fastqc_viral_R1=expand(f'{VIRUS_DIR}/fastqc/{{sample}}_R1_fastqc.html', sample=SAMPLES),
+        fastqc_viral_R2=expand(f'{VIRUS_DIR}/fastqc/{{sample}}_R2_fastqc.html', sample=SAMPLES),
+        html=f'{VIRUS_DIR}/multiqc_viral_report.html'
+
+        #viral_bams=expand(f'{VIRUS_DIR}/sort/{{sample}}_sorted_viral.bam', sample=SAMPLES),
+        #viral_counts=f'{RESULTS_DIR}/featurecounts/counts_viral.txt'
 
 ###########################
 ##### QUALITY CONTROL #####
@@ -384,10 +388,10 @@ rule extract_unmapped_reads:
     shell:
         '''
         echo 'Extracting unmapped reads from {input.bam}...'
-        samtools view -b -f 12 \
-        -@ {threads} \
+        samtools view -b -h -f 12 \
         {input.bam} \
-        > {output.unmapped_bam} \
+        -o {output.unmapped_bam} \
+        -@ {threads} \
         &> {log}
         '''
 
@@ -399,7 +403,7 @@ rule name_sort_viral_bam:
     threads:
         config['threads']['samtools']
     log:
-        f'{LOGS_DIR}/samtools_sort/{{sample}}_name_sort_viral.log'
+        f'{VIRUS_DIR}/logs/samtools_sort/{{sample}}_name_sort_viral.log'
     shell:
         '''
         echo 'Sorting {input.bam} by name...'
@@ -419,7 +423,7 @@ rule bam_to_fastq:
     threads: 
         config['threads']['samtools']
     log:
-        f'{LOGS_DIR}/fastq/{{sample}}_fastq.log'
+        f'{VIRUS_DIR}/logs/fastq/{{sample}}_fastq_viral.log'
     shell:
         '''
         echo 'Extracting FASTQ files from {input.sorted_bam}...'
@@ -431,6 +435,28 @@ rule bam_to_fastq:
         &> {log}
         '''
 
+rule fastqc_viral:
+    input:
+        R1=f'{VIRUS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        R2=f'{VIRUS_DIR}/fastq/{{sample}}_R2.fastq.gz'
+    output:
+        R1=multiext(f'{VIRUS_DIR}/fastqc/{{sample}}_R1_fastqc','.html','.zip'),
+        R2=multiext(f'{VIRUS_DIR}/fastqc/{{sample}}_R2_fastqc','.html','.zip')
+    threads:
+        config['threads']['fastqc']
+    log:
+        f'{VIRUS_DIR}/logs/fastqc/{{sample}}_fastqc_virus.log'
+    params:
+        out_dir=f'{VIRUS_DIR}/fastqc'
+    shell:
+        '''
+        echo 'Running a quality control report for {input.R1} and {input.R2}...'
+        fastqc -o {params.out_dir} \
+         -t {threads} \
+         {input.R1} \
+         {input.R2} \
+         &> {log}
+        '''
 rule hisat2_index_viral:
     input: 
         fasta=VSV_FASTA
@@ -450,7 +476,7 @@ rule hisat2_index_viral:
     params:
         index_base=f'{VSV_FASTA}'
     log:
-        f'{LOGS_DIR}/hisat2/index_viral.log'
+        f'{VIRUS_DIR}/logs/hisat2/index_viral.log'
     shell:
         '''
         echo 'Building hisat2 index for {input.fasta}...'
@@ -479,7 +505,7 @@ rule align_viral:
     threads:
         config['threads']['hisat2']
     log:
-        f'{LOGS_DIR}/hisat2_virus/{{sample}}_virus_align.log'
+        f'{VIRUS_DIR}/logs/hisat2_virus/{{sample}}_virus_align.log'
     params:
         index_base=f'{VSV_FASTA}'
     shell:
@@ -501,7 +527,7 @@ rule sort_viral_bam:
     threads:
         config['threads']['samtools']
     log:
-        f'{LOGS_DIR}/samtools_sort/{{sample}}_sortbam_viral.log'
+        f'{VIRUS_DIR}/logs/samtools_sort/{{sample}}_sortbam_viral.log'
     shell:
         '''
         echo 'Sorting {input.sam} by name...'
@@ -516,11 +542,11 @@ rule feature_counts_viral:
         bams=expand(f'{VIRUS_DIR}/sort/{{sample}}_aligned_sorted_viral.bam', sample=SAMPLES),
         gtf=VSV_GTF
     output:
-        counts=f'{RESULTS_DIR}/featurecounts/counts_viral.txt'
+        counts=f'{VIRUS_DIR}/featurecounts/counts_viral.txt'
     threads:
         config['threads']['featurecounts']
     log:
-        f'{LOGS_DIR}/featurecounts/featurecounts_viral.log'
+        f'{VIRUS_DIR}/logs/featurecounts/featurecounts_viral.log'
     shell:
         '''
         echo 'Running featureCounts for {input.bams}...'
@@ -532,7 +558,7 @@ rule feature_counts_viral:
         {input.bams} \
         &> {log}
         '''
-        
+
 ###########################
 ######### REPORT ##########
 ###########################
@@ -560,3 +586,20 @@ rule multiqc:
         -o {REPORT_DIR} \
         &> {log}
         '''
+
+rule multiqc_viral:
+    input:
+        fastqc=expand(f'{VIRUS_DIR}/fastqc/{{sample}}_{{read}}_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
+        counts=f'{VIRUS_DIR}/featurecounts/counts_viral.txt'
+    output:
+        html=f'{VIRUS_DIR}/multiqc_viral_report.html'
+    log:
+        f'{VIRUS_DIR}/logs/multiqc_viral.log'
+    shell:
+        '''
+        multiqc {VIRUS_DIR} \
+        -o {VIRUS_DIR} \
+        -n multiqc_viral_report.html
+        &> {log}
+        '''
+

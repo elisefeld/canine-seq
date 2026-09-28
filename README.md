@@ -1,6 +1,6 @@
 # canine-seq
 
-canine-seq is a snakemake workflow for processing bulk paired-end RNA-seq data stored in unaligned CRAM format. The workflow performs quality control, adapter trimming, alignment, gene-level quantification and generation of multiQC reports. Reads that fail to align to the host genome are aligned against a viral genome for detection of viral transcripts. 
+canine-seq is a snakemake workflow for processing bulk paired-end RNA-seq data stored in unaligned CRAM format. The workflow performs quality control, adapter trimming, alignment, gene-level quantification and generation of multiQC reports. Reads that fail to align to the host genome are extracted and re-aligned against a viral genome for detection of viral transcripts. 
 
 ## Features
 
@@ -20,7 +20,7 @@ Clone the repository:
 
 ```bash
 git clone https://github.com/elisefeld/canine-seq.git
-cd project
+cd canine-seq
 ```
 
 Detailed installation instructions are available in [install.md](docs/INSTALL.md).
@@ -44,42 +44,43 @@ It is recommended to run this program inside a conda environment using a conda p
 
 ### Input
 
-Raw data and the sample sheet must be stored in a project-specific directory under `data/`. Reference files for both host and virus must be stored under a reference directory  specified by the name variable `config.yaml`.
+Raw data and the sample sheet must be stored in a subdirectory under `data/` whose name matches the project name in `config.yaml`
+
+Host and viral reference files must be stored in subdirectories under `data/reference/`. The subdirectory names must match the values specified in `ref.main.name` and `ref.virus.name` within `config.yaml`. These subdirectories must each contain a genome fasta file and annotation gtf file corresponding to the correct organism. 
 
 The sample sheet must contain a column named `sample_id` containing sample names that exactly match the CRAM filenames (excluding extensions). An example sample sheet is provided [here](config/example_sheet.csv).
 
 ```text
 canine_seq/
 ├── config/
-|   ├── env.yaml
+│   ├── env.yaml
 │   └── config.yaml
 ├── data/
 │   ├── <PROJECT>/
 │   │   ├── sample.cram
 │   │   ├── sample.cram.crai
 │   │   └── <SAMPLE_SHEET>
-│   │
 │   └── reference/
 │       └── <REF_MAIN_NAME>/
 │           ├── <FASTA>
 │           └── <GTF>
 |        └── <REF_VIRUS_NAME>/
-|           ├── <FASTA>
+│           ├── <FASTA>
 │           └── <GTF>
 └── runs/
     └── <RUN_NAME>/
-        └── logs/
-          ├── main/
-          └── virus/
-        └── report/
-          ├── main/
-          └── virus/
-        └── igv/
-          ├── main/
-          └── virus/
+        ├── logs/
+        │   ├── main/
+        │   └── virus/
+        ├── report/
+        │   ├── main/
+        │   └── virus/
+        ├── igv/
+        │   ├── main/
+        │   └── virus/
         └── results/
-          ├── main/
-          └── virus/
+            ├── main/
+            └── virus/
 ```
 
 ### Example Configuration
@@ -99,7 +100,6 @@ ref:
     name: host_reference
     fasta: genome.fa
     gtf: genes.gtf
-
   virus:
     name: virus_reference
     fasta: virus.fa
@@ -120,7 +120,7 @@ sample_id
 SAMPLE001
 ```
 
-### Example Directory Layout
+**Example Directory Layout**
 
 ```text
 canine_seq/
@@ -142,18 +142,18 @@ canine_seq/
 │           └── virus.gtf
 └── runs/
     └── test_run/
-        └── logs/
-          ├── main/
-          └── virus/
-        └── report/
-          ├── main/
-          └── virus/
-        └── igv/
-          ├── main/
-          └── virus/
+        ├── logs/
+        │   ├── main/
+        │   └── virus/
+        ├── report/
+        │   ├── main/
+        │   └── virus/
+        ├── igv/
+        │   ├── main/
+        │   └── virus/
         └── results/
-          ├── main/
-          └── virus/
+            ├── main/
+            └── virus/
 ```
 
 ### Threads
@@ -163,7 +163,6 @@ threads:
   samtools: 6
   fastqc: 1
   fastp: 4
-  kallisto: 4
   hisat2: 8
   featurecounts: 2
 ```
@@ -238,7 +237,15 @@ runs/
             └── *.bam.bai
 ```
 
-`featurecounts` will contain the unmerged gene counts for each sample. 
+#### Key Outputs
+
+| Output | Location | Description |
+|----------|----------|-------------|
+| MultiQC Reports | `runs/<RUN_NAME>/report/main/multiqc_report.html`, `runs/<RUN_NAME>/report/virus/multiqc_virus_report.html` | Interactive summary of quality control metrics, alignment statistics, and gene quantification results for the host or virus detection workflows. |
+| Gene Counts | `runs/<RUN_NAME>/results/main/featurecounts/counts.txt`, `runs/<RUN_NAME>/results/virus/featurecounts/counts_viral.txt` | Gene-by-sample count matrix generated from host or virus genome alignments using featureCounts. |Quality control reports generated after adapter and quality trimming. |
+| Aligned BAM Files | `runs/<RUN_NAME>/results/main/sort/`, `runs/<RUN_NAME>/results/virus/sort/` | Name-sorted BAM files generated following alignment to the host or viral genome. |
+| IGV-ready BAM and BAM index Files | `runs/<RUN_NAME>/igv/main/*.bam`, `runs/<RUN_NAME>/igv/main/*.bam.bai` | Coordinate-sorted BAM and BAM index files suitable for visualization in IGV. |
+| Workflow Logs | `runs/<RUN_NAME>/logs/` | Log files generated for each workflow step, useful for troubleshooting. |
 
 ---
 ## License

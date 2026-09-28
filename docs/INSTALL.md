@@ -111,17 +111,17 @@ We will download the Linux distribution Ubuntu to use with WSL.
    ```bash
    nano config/config.yaml
    ```
-3. Create a folder to hold your data. YOUR_PROJECT should exactly match the project name you set in `config.yaml`
+3. Create a folder to hold your raw data. YOUR_PROJECT should exactly match the project name you set in `config.yaml`
     ```bash
     mkdir data/YOUR_PROJECT
     ```
-
-4. Create a folder to hold your reference data. It should exactly be (REF_SPECIES)\_(REF_BUILD)\_(REF_RELEASE)
+4. Create folders to hold your reference data. YOUR_HOST_REFERENCE and YOUR_VIRUS_REFERENCE should exactly match the reference names you set in `config.yaml`
     ```bash 
-    mkdir data/reference/YOUR_REFERENCE
+    mkdir data/reference/YOUR_HOST_REFERENCE
+    mkdir data/reference/YOUR_VIRUS_REFERENCE
     ```
 5. Using file explorer, move your .cram and .crai files and sample sheet to `data/YOUR_PROJECT/`
-6. Using file explorer, move your reference files to `data/reference/YOUR_REFERENCE`
+6. Using file explorer, move your reference files to `data/reference/YOUR_HOST_REFERENCE` and `data/reference/YOUR_VIRUS_REFERENCE`
 
 #### Run the pipeline
 1. Navigate to the project directory:

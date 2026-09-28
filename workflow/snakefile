@@ -8,41 +8,52 @@ import pandas as pd
 ###########################
 configfile: 'config/config.yaml' # loads user defined settings from config.yaml
 
-PROJECT = config['project']['name']
+PROJECT = config['project']['name'] # name of the project used to find the correct data folder
 
 # Directory declaration and creation
-DATA_DIR = os.path.join(config['path']['data_dir'], PROJECT) # this directory should contain .cram and .crai
-MAIN_REF_DIR = os.path.join(config['path']['data_dir'], config['path']['reference_dir'], config['ref']['main']['name']) # should contain 
-VIRUS_REF_DIR = os.path.join(config['path']['data_dir'], config['path']['reference_dir'], config['ref']['virus']['name'])
+PROJ_DATA_DIR = os.path.join('data', PROJECT) # this directory should contain .cram and .crai files and the sample sheet.
+MAIN_REF_DIR = os.path.join('data', 'reference', config['ref']['main']['name']) # should contain fasta and gtf for main species
+VIRUS_REF_DIR = os.path.join('data', 'reference', config['ref']['virus']['name']) # should contain fasta and gtf for virus
 
-RUN_DIR = os.path.join(config['path']['run_dir'], config['run']['run_name'])
-RESULTS_DIR = os.path.join(RUN_DIR, config['path']['results_dir'])
-REPORT_DIR = os.path.join(RUN_DIR, config['path']['report_dir'])
-LOGS_DIR = os.path.join(RUN_DIR, config['path']['log_dir'])
-IGV_DIR = os.path.join(RUN_DIR, 'igv')
-VIRUS_DIR = os.path.join(RUN_DIR, 'virus')
+RUN_DIR = os.path.join('runs', config['run']['run_name'])
 
-dirs = [DATA_DIR, MAIN_REF_DIR, VIRUS_REF_DIR, RESULTS_DIR, REPORT_DIR, LOGS_DIR, IGV_DIR, VIRUS_DIR]
+RESULTS_MAIN_DIR = os.path.join(RUN_DIR, 'results', 'main')
+RESULTS_VIRUS_DIR = os.path.join(RUN_DIR, 'results', 'virus')
+
+REPORT_MAIN_DIR = os.path.join(RUN_DIR, 'report', 'main')
+REPORT_VIRUS_DIR = os.path.join(RUN_DIR, 'report', 'virus')
+
+IGV_MAIN_DIR = os.path.join(RUN_DIR, 'igv', 'main')
+IGV_VIRUS_DIR = os.path.join(RUN_DIR, 'igv', 'virus')
+
+LOGS_MAIN_DIR = os.path.join(RUN_DIR, 'logs', 'main')
+LOGS_VIRUS_DIR = os.path.join(RUN_DIR, 'logs', 'virus')
+
+
+# Creation of main directories if they do not exist
+dirs = [RUN_DIR, RESULTS_MAIN_DIR, RESULTS_VIRUS_DIR, REPORT_MAIN_DIR, REPORT_VIRUS_DIR, IGV_MAIN_DIR, IGV_VIRUS_DIR, LOGS_MAIN_DIR, LOGS_VIRUS_DIR]
 for directory in dirs:
     os.makedirs(directory,exist_ok=True)
     print(f'Project directory \'{directory}\' created successfully', file=sys.stderr)
 
-FASTA = os.path.join(MAIN_REF_DIR, config['ref']['main']['fasta'])
-GTF   = os.path.join(MAIN_REF_DIR, config['ref']['main']['gtf'])
+# Reference files for main species
+MAIN_FASTA = os.path.join(MAIN_REF_DIR, config['ref']['main']['fasta'])
+MAIN_GTF   = os.path.join(MAIN_REF_DIR, config['ref']['main']['gtf'])
+
+# Reference files for virus
 VIRUS_FASTA = os.path.join(VIRUS_REF_DIR, config['ref']['virus']['fasta'])
 VIRUS_GTF   = os.path.join(VIRUS_REF_DIR, config['ref']['virus']['gtf'])
 
-# File declaration and checks
-SAMPLE_SHEET = os.path.join(DATA_DIR, config['run']['sample_sheet'])
-if os.path.exists(SAMPLE_SHEET):
-    print(f'File \'{SAMPLE_SHEET}\' located successfully', file=sys.stderr)
+# Sample sheet verification (checking if sample sheet exists in correct directory)
+SAMPLE_SHEET = os.path.join(PROJ_DATA_DIR, config['run']['sample_sheet'])
+if os.path.exists(SAMPLE_SHEET): 
+    print(f'File \'{SAMPLE_SHEET}\' located successfully', file=sys.stderr) 
 else:
     raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), SAMPLE_SHEET)
          
-# Identifying samples from sample sheet and data directory
-samples_df = pd.read_csv(SAMPLE_SHEET, sep = ',')
-sample_sheet = samples_df['sample_id'].tolist()
-sample_data = glob_wildcards(f'{DATA_DIR}/{{sample}}.cram').sample
+# Checking if sample sheet actually has rows with sample information
+samples_df = pd.read_csv(SAMPLE_SHEET, sep = ',') 
+sample_sheet = samples_df['sample_id'].tolist() # creates list of sample ids in sample sheet. sample sheet MUST have a 'sample_id' column
 
 if len(sample_sheet) > 0:
     print(f'{len(sample_sheet)} samples found in sample sheet ({SAMPLE_SHEET}):', file=sys.stderr)
@@ -51,18 +62,22 @@ if len(sample_sheet) > 0:
 else:
     raise ValueError(f'No samples found in sample sheet ({SAMPLE_SHEET})')
 
+# Checking if cram files exist in the data directory
+sample_data = glob_wildcards(f'{PROJ_DATA_DIR}/{{sample}}.cram').sample # grabs file names that have a cram extension
+
 if len(sample_data) > 0:
-    print(f'{len(sample_data)} samples found in data directory ({DATA_DIR}):', file=sys.stderr)
+    print(f'{len(sample_data)} samples found in data directory ({PROJ_DATA_DIR}):', file=sys.stderr)
     for sample in sample_data:
         print(f'- {sample}', file=sys.stderr)
 else:
-    raise ValueError(f'No samples found in data directory ({DATA_DIR})')
+    raise ValueError(f'No samples found in data directory ({PROJ_DATA_DIR})')
 
+# Checking if samples in data directory and sample sheet match
 SAMPLES = (set(sample_sheet) & set(sample_data)) # samples present in both locations
 MISSING = sorted(set(sample_sheet) - set(sample_data)) # samples listed in sample sheet but missing from data directory
 
 if MISSING:
-    print(f'WARNING: {len(MISSING)} samples from the sample sheet ({SAMPLE_SHEET}) were not found in data directory ({DATA_DIR}):', file=sys.stderr)
+    print(f'WARNING: {len(MISSING)} samples from the sample sheet ({SAMPLE_SHEET}) were not found in data directory ({PROJ_DATA_DIR}):', file=sys.stderr)
     for sample in MISSING:
         print(f'- {sample}', file=sys.stderr)
 
@@ -72,43 +87,43 @@ for sample in SAMPLES:
 
 print(f'Running analysis of {len(SAMPLES)} RNA-seq samples for {PROJECT} project.' , file=sys.stderr)
 
+
+
+
 # Declaring desired outputs for the pipeline
 rule all:
     input: 
-        report=f'{REPORT_DIR}/multiqc_report.html',
-        coord_sorted_bams=expand(f'{IGV_DIR}/{{sample}}_coord_sorted.bam', sample=SAMPLES),
-        bam_indices=expand(f'{IGV_DIR}/{{sample}}_coord_sorted.bam.bai', sample=SAMPLES),
-        unmapped_bam=expand(f'{VIRUS_DIR}/unmapped/{{sample}}_unmapped.bam', sample=SAMPLES),
-        fastqc_viral_R1=expand(f'{VIRUS_DIR}/fastqc/{{sample}}_R1_fastqc.html', sample=SAMPLES),
-        fastqc_viral_R2=expand(f'{VIRUS_DIR}/fastqc/{{sample}}_R2_fastqc.html', sample=SAMPLES),
-        html=f'{VIRUS_DIR}/multiqc_viral_report.html'
-
-        #viral_bams=expand(f'{VIRUS_DIR}/sort/{{sample}}_sorted_viral.bam', sample=SAMPLES),
-        #viral_counts=f'{RESULTS_DIR}/featurecounts/counts_viral.txt'
+        main_report=f'{REPORT_MAIN_DIR}/multiqc_report.html',
+        virus_report=f'{REPORT_VIRUS_DIR}/multiqc_virus_report.html',
+        coord_sorted_bams=expand(f'{IGV_MAIN_DIR}/{{sample}}_coord_sorted.bam', sample=SAMPLES),
+        bam_indices=expand(f'{IGV_MAIN_DIR}/{{sample}}_coord_sorted.bam.bai', sample=SAMPLES),
+        unmapped_bam=expand(f'{RESULTS_VIRUS_DIR}/unmapped/{{sample}}_unmapped.bam', sample=SAMPLES),
+        fastqc_viral_R1=expand(f'{RESULTS_VIRUS_DIR}/fastqc/{{sample}}_R1_fastqc.html', sample=SAMPLES),
+        fastqc_viral_R2=expand(f'{RESULTS_VIRUS_DIR}/fastqc/{{sample}}_R2_fastqc.html', sample=SAMPLES),
 
 ###########################
 ##### QUALITY CONTROL #####
 ###########################
 rule flagstat:
     input: 
-        cram=f'{DATA_DIR}/{{sample}}.cram'
+        cram=f'{PROJ_DATA_DIR}/{{sample}}.cram'
     output: 
-        txt=f'{RESULTS_DIR}/flagstat/pre_align/{{sample}}.txt'
+        txt=f'{RESULTS_MAIN_DIR}/flagstat/pre_align/{{sample}}.txt'
     shell:
         '''
         echo 'Running samtools flagstat on {input.cram}...'
         samtools flagstat {input.cram} > {output.txt}
         '''
 
-rule sort_cram:
+rule name_sort_cram:
     input:
-        cram=f'{DATA_DIR}/{{sample}}.cram'
+        cram=f'{PROJ_DATA_DIR}/{{sample}}.cram'
     output:
-        sorted_cram=temp(f'{RESULTS_DIR}/sort/{{sample}}.cram')
+        sorted_cram=temp(f'{RESULTS_MAIN_DIR}/sort/{{sample}}.cram')
     threads:
         config['threads']['samtools']
     log:
-        f'{LOGS_DIR}/samtools_sort/{{sample}}_sort.log'
+        f'{LOGS_MAIN_DIR}/samtools/name_sort/{{sample}}_name_sort_cram.log'
     shell:
         '''
         echo 'Sorting {input.cram} by name...'
@@ -121,14 +136,14 @@ rule sort_cram:
 
 rule cram_to_fastq:
     input: 
-        sorted_cram=f'{RESULTS_DIR}/sort/{{sample}}.cram',
+        sorted_cram=f'{RESULTS_MAIN_DIR}/sort/{{sample}}.cram',
     output:
-        R1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
-        R2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
+        R1=f'{RESULTS_MAIN_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        R2=f'{RESULTS_MAIN_DIR}/fastq/{{sample}}_R2.fastq.gz'
     threads: 
         config['threads']['samtools']
     log:
-        f'{LOGS_DIR}/fastq/{{sample}}_fastq.log'
+        f'{LOGS_MAIN_DIR}/samtools/fastq/{{sample}}_cram_to_fastq.log'
     shell:
         '''
         echo 'Extracting FASTQ files from {input.sorted_cram}...'
@@ -142,17 +157,17 @@ rule cram_to_fastq:
 
 rule fastqc:
     input:
-        R1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
-        R2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
+        R1=f'{RESULTS_MAIN_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        R2=f'{RESULTS_MAIN_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        R1=multiext(f'{RESULTS_DIR}/fastqc/pre_trim/{{sample}}_R1_fastqc','.html','.zip'),
-        R2=multiext(f'{RESULTS_DIR}/fastqc/pre_trim/{{sample}}_R2_fastqc','.html','.zip')
+        R1=multiext(f'{RESULTS_MAIN_DIR}/fastqc/pre_trim/{{sample}}_R1_fastqc','.html','.zip'),
+        R2=multiext(f'{RESULTS_MAIN_DIR}/fastqc/pre_trim/{{sample}}_R2_fastqc','.html','.zip')
     threads:
         config['threads']['fastqc']
     log:
-        f'{LOGS_DIR}/fastqc/pre_trim/{{sample}}_fastqc.log'
+        f'{LOGS_MAIN_DIR}/fastqc/pre_trim/{{sample}}_fastqc.log'
     params:
-        out_dir=f'{RESULTS_DIR}/fastqc/pre_trim'
+        out_dir=f'{RESULTS_MAIN_DIR}/fastqc/pre_trim'
     shell:
         '''
         echo 'Running a quality control report for {input.R1} and {input.R2}...'
@@ -165,17 +180,17 @@ rule fastqc:
 
 rule fastp_trim:
     input:
-        R1=f'{RESULTS_DIR}/fastq/{{sample}}_R1.fastq.gz',
-        R2=f'{RESULTS_DIR}/fastq/{{sample}}_R2.fastq.gz'
+        R1=f'{RESULTS_MAIN_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        R2=f'{RESULTS_MAIN_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        trimmed_R1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        trimmed_R2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
-        html=f'{RESULTS_DIR}/fastp/{{sample}}.html',
-        json=f'{RESULTS_DIR}/fastp/{{sample}}.json'
+        trimmed_R1=f'{RESULTS_MAIN_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_R2=f'{RESULTS_MAIN_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
+        html=f'{RESULTS_MAIN_DIR}/fastp/{{sample}}.html',
+        json=f'{RESULTS_MAIN_DIR}/fastp/{{sample}}.json'
     threads:
         config['threads']['fastp']
     log:
-        f'{LOGS_DIR}/fastp/{{sample}}_fastp.log'
+        f'{LOGS_MAIN_DIR}/fastp/{{sample}}_fastp_trim.log'
     shell:
         '''
         echo 'Trimming reads for {input.R1} and {input.R2}...'
@@ -193,17 +208,17 @@ rule fastp_trim:
 
 rule fastqc_trimmed:
     input:
-        R1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        R2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz'
+        R1=f'{RESULTS_MAIN_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        R2=f'{RESULTS_MAIN_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz'
     output:
-        R1=multiext(f'{RESULTS_DIR}/fastqc/post_trim/{{sample}}_R1_trimmed_fastqc','.html','.zip'),
-        R2=multiext(f'{RESULTS_DIR}/fastqc/post_trim/{{sample}}_R2_trimmed_fastqc','.html','.zip')
+        R1=multiext(f'{RESULTS_MAIN_DIR}/fastqc/post_trim/{{sample}}_R1_trimmed_fastqc','.html','.zip'),
+        R2=multiext(f'{RESULTS_MAIN_DIR}/fastqc/post_trim/{{sample}}_R2_trimmed_fastqc','.html','.zip')
     threads:
         config['threads']['fastqc']
     log:
-        f'{LOGS_DIR}/fastqc/post_trim/{{sample}}_fastqc_trimmed.log'
+        f'{LOGS_MAIN_DIR}/fastqc/post_trim/{{sample}}_fastqc_trimmed.log'
     params:
-        out_dir=f'{RESULTS_DIR}/fastqc/post_trim'
+        out_dir=f'{RESULTS_MAIN_DIR}/fastqc/post_trim'
     shell:
         '''
         echo 'Running a quality control report for {input.R1} and {input.R2}...'
@@ -219,10 +234,10 @@ rule fastqc_trimmed:
 ###########################
 rule hisat2_index:
     input: 
-        fasta=FASTA
+        fasta=MAIN_FASTA
     output: 
         multiext(
-            FASTA,
+            MAIN_FASTA,
             '.1.ht2',
             '.2.ht2',
             '.3.ht2',
@@ -234,9 +249,9 @@ rule hisat2_index:
     threads:
         config['threads']['hisat2']
     params:
-        index_base=f'{FASTA}'
+        index_base=MAIN_FASTA
     log:
-        f'{LOGS_DIR}/hisat2/index.log'
+        f'{LOGS_MAIN_DIR}/hisat2/hisat2_index.log'
     shell:
         '''
         echo 'Building hisat2 index for {input.fasta}...'
@@ -249,7 +264,7 @@ rule hisat2_index:
 rule hisat2_align:
     input:
         multiext(
-            FASTA,
+            MAIN_FASTA,
             '.1.ht2',
             '.2.ht2',
             '.3.ht2',
@@ -258,16 +273,16 @@ rule hisat2_align:
             '.6.ht2',
             '.7.ht2',
             '.8.ht2'),
-        trimmed_R1=f'{RESULTS_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
-        trimmed_R2=f'{RESULTS_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
+        trimmed_R1=f'{RESULTS_MAIN_DIR}/fastp/{{sample}}_R1_trimmed.fastq.gz',
+        trimmed_R2=f'{RESULTS_MAIN_DIR}/fastp/{{sample}}_R2_trimmed.fastq.gz',
     threads:
         config['threads']['hisat2']
     output:
-        sam=temp(f'{RESULTS_DIR}/hisat2/{{sample}}.sam')
+        sam=temp(f'{RESULTS_MAIN_DIR}/hisat2/{{sample}}.sam')
     log:
-        f'{LOGS_DIR}/hisat2/{{sample}}_align.log'
+        f'{LOGS_MAIN_DIR}/hisat2/{{sample}}_hisat2_align.log'
     params:
-        index_base=f'{FASTA}'
+        index_base=f'{MAIN_FASTA}'
     shell:
         '''
         echo 'Running HISAT2 alignment for {input.trimmed_R1} and {input.trimmed_R2}'
@@ -279,15 +294,15 @@ rule hisat2_align:
         &> {log}
         '''
 
-rule sort_bam:
+rule name_sort_bam:
     input:
-        sam=f'{RESULTS_DIR}/hisat2/{{sample}}.sam'
+        sam=f'{RESULTS_MAIN_DIR}/hisat2/{{sample}}.sam'
     output:
-        sorted_bam=f'{RESULTS_DIR}/sort/{{sample}}_sorted.bam'
+        sorted_bam=f'{RESULTS_MAIN_DIR}/sort/{{sample}}_sorted.bam'
     threads:
         config['threads']['samtools']
     log:
-        f'{LOGS_DIR}/samtools_sort/{{sample}}_sortbam.log'
+        f'{LOGS_MAIN_DIR}/samtools/name_sort/{{sample}}_name_sort_bam.log'
     shell:
         '''
         echo 'Sorting {input.sam} by name...'
@@ -300,9 +315,9 @@ rule sort_bam:
 
 rule flagstat_aligned:
     input: 
-        sorted_bam=f'{RESULTS_DIR}/sort/{{sample}}_sorted.bam'
+        sorted_bam=f'{RESULTS_MAIN_DIR}/sort/{{sample}}_sorted.bam'
     output: 
-        txt=f'{RESULTS_DIR}/flagstat/post_align/{{sample}}_aligned.txt'
+        txt=f'{RESULTS_MAIN_DIR}/flagstat/post_align/{{sample}}_aligned.txt'
     shell:
         '''
         echo 'Running samtools flagstat on {input.sorted_bam}...'
@@ -311,14 +326,14 @@ rule flagstat_aligned:
 
 rule feature_counts:
     input:
-        bams=expand(f'{RESULTS_DIR}/sort/{{sample}}_sorted.bam', sample=SAMPLES),
-        gtf=GTF
+        bams=expand(f'{RESULTS_MAIN_DIR}/sort/{{sample}}_sorted.bam', sample=SAMPLES),
+        gtf=MAIN_GTF
     output:
-        counts=f'{RESULTS_DIR}/featurecounts/counts.txt'
+        counts=f'{RESULTS_MAIN_DIR}/featurecounts/counts.txt'
     threads:
         config['threads']['featurecounts']
     log:
-        f'{LOGS_DIR}/featurecounts/featurecounts.log'
+        f'{LOGS_MAIN_DIR}/featurecounts/featurecounts.log'
     shell:
         '''
         echo 'Running featureCounts for {input.bams}...'
@@ -336,13 +351,13 @@ rule feature_counts:
 ###########################
 rule coord_sort_bam:
     input:
-        bam=f'{RESULTS_DIR}/sort/{{sample}}_sorted.bam'
+        bam=f'{RESULTS_MAIN_DIR}/sort/{{sample}}_sorted.bam'
     output:
-        sorted_bam=f'{IGV_DIR}/{{sample}}_coord_sorted.bam'
+        sorted_bam=f'{IGV_MAIN_DIR}/{{sample}}_coord_sorted.bam'
     threads:
         config['threads']['samtools']
     log:
-        f'{LOGS_DIR}/samtools_sort/{{sample}}_coordsort.log'
+        f'{LOGS_MAIN_DIR}/samtools/coord_sort/{{sample}}/coord_sort_bam.log'
     shell:
         '''
         echo 'Sorting {input.bam} by coordinate...'
@@ -354,13 +369,13 @@ rule coord_sort_bam:
 
 rule index_bam:
     input:
-        bam=f'{IGV_DIR}/{{sample}}_coord_sorted.bam'
+        bam=f'{IGV_MAIN_DIR}/{{sample}}_coord_sorted.bam'
     output:
-        bai=f'{IGV_DIR}/{{sample}}_coord_sorted.bam.bai'
+        bai=f'{IGV_MAIN_DIR}/{{sample}}_coord_sorted.bam.bai'
     threads:
         config['threads']['samtools']
     log:
-        f'{LOGS_DIR}/samtools_index/{{sample}}_index.log'
+        f'{LOGS_MAIN_DIR}/samtools/index/{{sample}}_index_bam.log'
     shell:
         '''
         echo 'Indexing {input.bam}...'
@@ -374,13 +389,13 @@ rule index_bam:
 ###########################
 rule extract_unmapped_reads:
     input:
-        bam=f'{RESULTS_DIR}/sort/{{sample}}_sorted.bam'
+        bam=f'{RESULTS_MAIN_DIR}/sort/{{sample}}_sorted.bam'
     output:
-        unmapped_bam=f'{VIRUS_DIR}/unmapped/{{sample}}_unmapped.bam'
+        unmapped_bam=f'{RESULTS_VIRUS_DIR}/unmapped/{{sample}}_unmapped.bam'
     threads:
         config['threads']['samtools']
     log:
-        f'{LOGS_DIR}/samtools_extract/{{sample}}_extract.log'
+        f'{LOGS_VIRUS_DIR}/samtools/extract/{{sample}}_extract_unmapped_reads.log'
     shell:
         '''
         echo 'Extracting unmapped reads from {input.bam}...'
@@ -391,15 +406,15 @@ rule extract_unmapped_reads:
         &> {log}
         '''
 
-rule name_sort_viral_bam:
+rule name_sort_unmapped_virus_bam:
     input:
-        bam=f'{VIRUS_DIR}/unmapped/{{sample}}_unmapped.bam'
+        bam=f'{RESULTS_VIRUS_DIR}/unmapped/{{sample}}_unmapped.bam'
     output:
-        sorted_bam=temp(f'{VIRUS_DIR}/sort/{{sample}}_sorted_viral.bam')
+        sorted_bam=temp(f'{RESULTS_VIRUS_DIR}/sort/{{sample}}_sorted.bam')
     threads:
         config['threads']['samtools']
     log:
-        f'{VIRUS_DIR}/logs/samtools_sort/{{sample}}_name_sort_viral.log'
+        f'{LOGS_VIRUS_DIR}/samtools/sort/name_sort/{{sample}}name_sort_unmapped_virus_bam.log'
     shell:
         '''
         echo 'Sorting {input.bam} by name...'
@@ -412,14 +427,14 @@ rule name_sort_viral_bam:
 
 rule bam_to_fastq:
     input: 
-        sorted_bam=f'{VIRUS_DIR}/sort/{{sample}}_sorted_viral.bam',
+        sorted_bam=f'{RESULTS_VIRUS_DIR}/sort/{{sample}}_sorted.bam',
     output:
-        R1=f'{VIRUS_DIR}/fastq/{{sample}}_R1.fastq.gz',
-        R2=f'{VIRUS_DIR}/fastq/{{sample}}_R2.fastq.gz'
+        R1=f'{RESULTS_VIRUS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        R2=f'{RESULTS_VIRUS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     threads: 
         config['threads']['samtools']
     log:
-        f'{VIRUS_DIR}/logs/fastq/{{sample}}_fastq_viral.log'
+        f'{LOGS_VIRUS_DIR}/samtools/fastq/{{sample}}_bam_to_fastq.log'
     shell:
         '''
         echo 'Extracting FASTQ files from {input.sorted_bam}...'
@@ -431,19 +446,19 @@ rule bam_to_fastq:
         &> {log}
         '''
 
-rule fastqc_viral:
+rule fastqc_virus:
     input:
-        R1=f'{VIRUS_DIR}/fastq/{{sample}}_R1.fastq.gz',
-        R2=f'{VIRUS_DIR}/fastq/{{sample}}_R2.fastq.gz'
+        R1=f'{RESULTS_VIRUS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        R2=f'{RESULTS_VIRUS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        R1=multiext(f'{VIRUS_DIR}/fastqc/{{sample}}_R1_fastqc','.html','.zip'),
-        R2=multiext(f'{VIRUS_DIR}/fastqc/{{sample}}_R2_fastqc','.html','.zip')
+        R1=multiext(f'{RESULTS_VIRUS_DIR}/fastqc/{{sample}}_R1_fastqc','.html','.zip'),
+        R2=multiext(f'{RESULTS_VIRUS_DIR}/fastqc/{{sample}}_R2_fastqc','.html','.zip')
     threads:
         config['threads']['fastqc']
     log:
-        f'{VIRUS_DIR}/logs/fastqc/{{sample}}_fastqc_virus.log'
+        f'{LOGS_VIRUS_DIR}/fastqc/{{sample}}_fastqc_virus.log'
     params:
-        out_dir=f'{VIRUS_DIR}/fastqc'
+        out_dir=f'{RESULTS_VIRUS_DIR}/fastqc'
     shell:
         '''
         echo 'Running a quality control report for {input.R1} and {input.R2}...'
@@ -453,7 +468,7 @@ rule fastqc_viral:
          {input.R2} \
          &> {log}
         '''
-rule hisat2_index_viral:
+rule hisat2_index_virus:
     input: 
         fasta=VIRUS_FASTA
     output: 
@@ -470,9 +485,9 @@ rule hisat2_index_viral:
     threads:
         config['threads']['hisat2']
     params:
-        index_base=f'{VIRUS_FASTA}'
+        index_base=VIRUS_FASTA
     log:
-        f'{VIRUS_DIR}/logs/hisat2/index_viral.log'
+        f'{LOGS_VIRUS_DIR}/hisat2/hisat2_index_virus.log'
     shell:
         '''
         echo 'Building hisat2 index for {input.fasta}...'
@@ -482,7 +497,7 @@ rule hisat2_index_viral:
         &> {log}
         '''
 
-rule align_viral:
+rule align_virus:
     input: 
         multiext(
             VIRUS_FASTA,
@@ -494,16 +509,16 @@ rule align_viral:
             '.6.ht2',
             '.7.ht2',
             '.8.ht2'),
-        R1=f'{VIRUS_DIR}/fastq/{{sample}}_R1.fastq.gz',
-        R2=f'{VIRUS_DIR}/fastq/{{sample}}_R2.fastq.gz'
+        R1=f'{RESULTS_VIRUS_DIR}/fastq/{{sample}}_R1.fastq.gz',
+        R2=f'{RESULTS_VIRUS_DIR}/fastq/{{sample}}_R2.fastq.gz'
     output:
-        sam=temp(f'{VIRUS_DIR}/hisat2/{{sample}}_virus_aligned.sam')
+        sam=temp(f'{RESULTS_VIRUS_DIR}/hisat2/{{sample}}_virus_aligned.sam')
     threads:
         config['threads']['hisat2']
     log:
-        f'{VIRUS_DIR}/logs/hisat2_virus/{{sample}}_virus_align.log'
+        f'{LOGS_VIRUS_DIR}/hisat2/{{sample}}_align_virus.log'
     params:
-        index_base=f'{VIRUS_FASTA}'
+        index_base=VIRUS_FASTA
     shell:
         '''
         echo 'Aligning reads from {input.R1} and {input.R2} to viral reference...'
@@ -515,15 +530,15 @@ rule align_viral:
         &> {log}
         '''
 
-rule sort_viral_bam:
+rule name_sort_aligned_virus_bam:
     input:
-        sam=f'{VIRUS_DIR}/hisat2/{{sample}}_virus_aligned.sam'
+        sam=f'{RESULTS_VIRUS_DIR}/hisat2/{{sample}}_virus_aligned.sam'
     output:
-        sorted_bam=f'{VIRUS_DIR}/sort/{{sample}}_aligned_sorted_viral.bam'
+        sorted_bam=f'{RESULTS_VIRUS_DIR}/sort/{{sample}}_aligned_sorted_viral.bam'
     threads:
         config['threads']['samtools']
     log:
-        f'{VIRUS_DIR}/logs/samtools_sort/{{sample}}_sortbam_viral.log'
+        f'{LOGS_VIRUS_DIR}/samtools/sort/{{sample}}name_sort_aligned_virus_bam.log'
     shell:
         '''
         echo 'Sorting {input.sam} by name...'
@@ -533,16 +548,16 @@ rule sort_viral_bam:
         -o {output.sorted_bam} \
         &> {log}
         '''
-rule feature_counts_viral:
+rule feature_counts_virus:
     input:
-        bams=expand(f'{VIRUS_DIR}/sort/{{sample}}_aligned_sorted_viral.bam', sample=SAMPLES),
+        bams=expand(f'{RESULTS_VIRUS_DIR}/sort/{{sample}}_aligned_sorted_viral.bam', sample=SAMPLES),
         gtf=VIRUS_GTF
     output:
-        counts=f'{VIRUS_DIR}/featurecounts/counts_viral.txt'
+        counts=f'{RESULTS_VIRUS_DIR}/featurecounts/counts_viral.txt'
     threads:
         config['threads']['featurecounts']
     log:
-        f'{VIRUS_DIR}/logs/featurecounts/featurecounts_viral.log'
+        f'{LOGS_VIRUS_DIR}/featurecounts/featurecounts_virus.log'
     shell:
         '''
         echo 'Running featureCounts for {input.bams}...'
@@ -560,41 +575,42 @@ rule feature_counts_viral:
 ###########################
 rule multiqc:
     input:
-        flagstat=expand(f'{RESULTS_DIR}/flagstat/pre_align/{{sample}}.txt', sample=SAMPLES),
-        flagstat_aligned=expand(f'{RESULTS_DIR}/flagstat/post_align/{{sample}}_aligned.txt', sample=SAMPLES),
-        fastqc=expand(f'{RESULTS_DIR}/fastqc/pre_trim/{{sample}}_{{read}}_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
-        fastqc_trimmed=expand(f'{RESULTS_DIR}/fastqc/post_trim/{{sample}}_{{read}}_trimmed_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
-        featurecounts=f'{RESULTS_DIR}/featurecounts/counts.txt'
+        flagstat=expand(f'{RESULTS_MAIN_DIR}/flagstat/pre_align/{{sample}}.txt', sample=SAMPLES),
+        flagstat_aligned=expand(f'{RESULTS_MAIN_DIR}/flagstat/post_align/{{sample}}_aligned.txt', sample=SAMPLES),
+        fastqc=expand(f'{RESULTS_MAIN_DIR}/fastqc/pre_trim/{{sample}}_{{read}}_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
+        fastqc_trimmed=expand(f'{RESULTS_MAIN_DIR}/fastqc/post_trim/{{sample}}_{{read}}_trimmed_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
+        featurecounts=f'{RESULTS_MAIN_DIR}/featurecounts/counts.txt'
         #kallisto=expand(f'{RESULTS_DIR}/kallisto/{{sample}}/abundance.tsv', sample=SAMPLES)
     output:
-        html=f'{REPORT_DIR}/multiqc_report.html'
+        html=f'{REPORT_MAIN_DIR}/multiqc_report.html'
     log:
-        f'{LOGS_DIR}/multiqc.log'
+        f'{LOGS_MAIN_DIR}/multiqc.log'
     params:
-        fastqc_ignore=f'{LOGS_DIR}/fastqc/pre_trim/*',
-        flagstat_ignore=f'{RESULTS_DIR}/flagstat/pre_align/*'
+        fastqc_ignore=f'{LOGS_MAIN_DIR}/fastqc/pre_trim/*',
+        flagstat_ignore=f'{RESULTS_MAIN_DIR}/flagstat/pre_align/*'
     shell:
         '''
-        multiqc {RESULTS_DIR} \
-        {LOGS_DIR} \
+        multiqc {RESULTS_MAIN_DIR} \
+        {LOGS_MAIN_DIR} \
         --ignore {params.fastqc_ignore} \
         --ignore {params.flagstat_ignore} \
-        -o {REPORT_DIR} \
+        -o {REPORT_MAIN_DIR} \
         &> {log}
         '''
 
-rule multiqc_viral:
+rule multiqc_virus:
     input:
-        fastqc=expand(f'{VIRUS_DIR}/fastqc/{{sample}}_{{read}}_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
-        counts=f'{VIRUS_DIR}/featurecounts/counts_viral.txt'
+        fastqc=expand(f'{RESULTS_VIRUS_DIR}/fastqc/{{sample}}_{{read}}_fastqc.{{ext}}', sample=SAMPLES, read=['R1', 'R2'], ext=['html', 'zip']),
+        counts=f'{RESULTS_VIRUS_DIR}/featurecounts/counts_viral.txt'
     output:
-        html=f'{VIRUS_DIR}/multiqc_viral_report.html'
+        html=f'{REPORT_VIRUS_DIR}/multiqc_virus_report.html'
     log:
-        f'{VIRUS_DIR}/logs/multiqc_viral.log'
+        f'{LOGS_VIRUS_DIR}/multiqc_viral.log'
     shell:
         '''
-        multiqc {VIRUS_DIR} \
-        -o {VIRUS_DIR} \
+        multiqc {RESULTS_VIRUS_DIR} \
+        {LOGS_VIRUS_DIR} \
+        -o {REPORT_VIRUS_DIR} \
         -n multiqc_viral_report.html
         &> {log}
         '''

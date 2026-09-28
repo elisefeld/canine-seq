@@ -31,7 +31,7 @@ import_feature_counts <- function(fc_path, sample_ids) {
     dplyr::rename_with(~ str_remove_all(.x, "runs\\/.*sort\\/|_sorted.bam")) |>
     select(all_of(sample_ids)) |>
     as.matrix()
-  message("Counts for ", length(counts), " genes across ", ncol(counts), " samples found.")
+  message("Counts for ", length(unique(rownames(counts))), " genes across ", ncol(counts), " samples found.")
   return(counts)
   }
   else {

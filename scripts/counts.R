@@ -41,5 +41,5 @@ plot_gene_expression <- function(counts, gene) {
     theme_classic() +
     labs(x = "Time (days)", 
          y = "Normalized count",
-         title = paste(gene, "expression over time"))
+         title = gene)
 }

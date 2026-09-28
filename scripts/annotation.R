@@ -44,13 +44,12 @@ read_homologs <- function(homolog_path){
   }
 }
 
-get_entrez_ids <- function(gene_names) {
-  sym_to_entrez <- clusterProfiler::bitr(unique(gene_names), fromType='SYMBOL', toType='ENTREZID', OrgDb="org.Hs.eg.db") |>
+get_entrez_ids <- function(gene_names, from_type = "SYMBOL") {
+  sym_to_entrez <- clusterProfiler::bitr(unique(gene_names), fromType=from_type, toType='ENTREZID', OrgDb="org.Hs.eg.db") |>
     group_by(SYMBOL) |>
     summarise(across(everything(), ~paste0(unique(.), collapse = ", "))) |>
-    dplyr::mutate(alt_entrez_id = str_extract(ENTREZID, "(.*)"),
-                  entrez_id = str_extract(ENTREZID, "^[^,]+")) |>
-    dplyr::select(SYMBOL, entrez_id, alt_entrez_id) |>
+    dplyr::mutate(entrez_id = str_extract(ENTREZID, "^[^,]+")) |> # selects the first entrez id if there are more than one
+    dplyr::select(SYMBOL, entrez_id) |>
     dplyr::rename(gene_id = SYMBOL) 
   return(sym_to_entrez)
 }

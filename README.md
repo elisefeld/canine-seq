@@ -1,6 +1,6 @@
 # canine-seq
 
-This project automates the analysis of paired-end bulk RNA-seq data in unaligned CRAM format.  
+canine-seq is a snakemake workflow for processing bulk paired-end RNA-seq data stored in unaligned CRAM format. The workflow performs quality control, adapter trimming, alignment, gene-level quantification and generation of multiQC reports. Reads that fail to align to the host genome are aligned against a viral genome for detection of viral transcripts. 
 
 ## Features
 
@@ -9,7 +9,6 @@ This project automates the analysis of paired-end bulk RNA-seq data in unaligned
 - `fastp`: Adapter and quality trimming
 - `HISAT2`: Genome alignment
 - `featureCounts`: Gene-level quantification
-- `kallisto` Pseudoalignment and gene-level quantification. Disabled by default.
 - `MultiQC`: Aggregated quality control reports
 
 
@@ -34,11 +33,10 @@ Detailed installation instructions are available in [install.md](docs/INSTALL.md
 - FastQC
 - fastp
 - HISAT2
-- kallisto
 - featureCounts (Subread)
 - MultiQC
 
-It is recommended to run this program inside a conda environment using a conda package manager and `config/env.yaml` .
+It is recommended to run this program inside a conda environment using a conda package manager and `config/env.yaml`.
 
 ---
 
@@ -46,13 +44,14 @@ It is recommended to run this program inside a conda environment using a conda p
 
 ### Input
 
-Raw data and the sample sheet must be stored in a project-specific directory under `data/`. Reference files must be stored under a reference directory named using the species, build, and release values specified in `config.yaml`.
+Raw data and the sample sheet must be stored in a project-specific directory under `data/`. Reference files for both host and virus must be stored under a reference directory  specified by the name variable `config.yaml`.
 
 The sample sheet must contain a column named `sample_id` containing sample names that exactly match the CRAM filenames (excluding extensions). An example sample sheet is provided [here](config/example_sheet.csv).
 
 ```text
 canine_seq/
 ├── config/
+|   ├── env.yaml
 │   └── config.yaml
 ├── data/
 │   ├── <PROJECT>/
@@ -61,16 +60,26 @@ canine_seq/
 │   │   └── <SAMPLE_SHEET>
 │   │
 │   └── reference/
-│       └── <SPECIES>_<BUILD>_<RELEASE>/
+│       └── <REF_MAIN_NAME>/
 │           ├── <FASTA>
-│           ├── <CDNA>
 │           └── <GTF>
-│
+|        └── <REF_VIRUS_NAME>/
+|           ├── <FASTA>
+│           └── <GTF>
 └── runs/
     └── <RUN_NAME>/
-        ├── logs/
-        ├── report/
+        └── logs/
+          ├── main/
+          └── virus/
+        └── report/
+          ├── main/
+          └── virus/
+        └── igv/
+          ├── main/
+          └── virus/
         └── results/
+          ├── main/
+          └── virus/
 ```
 
 ### Example Configuration
@@ -82,16 +91,26 @@ project:
   name: my_project
 
 run:
-  run_name: my_run
+  run_name: test_run
   sample_sheet: sample_sheet.csv
-  ref_species: Canis_lupus_familiarisgsd
-  ref_build: UU_Cfam_GSD_1.0
-  ref_release: 116
 
 ref:
-  fasta: genome.fa
-  cdna: cdna.fa
-  gtf: genes.gtf.gz
+  main:
+    name: host_reference
+    fasta: genome.fa
+    gtf: genes.gtf
+
+  virus:
+    name: virus_reference
+    fasta: virus.fa
+    gtf: virus.gtf
+
+threads:
+  samtools: 8
+  fastqc: 2
+  fastp: 8
+  hisat2: 16
+  featurecounts: 4
 ```
 
 **sample_sheet.csv**
@@ -105,6 +124,9 @@ SAMPLE001
 
 ```text
 canine_seq/
+├── config/
+|   ├── env.yaml
+│   └── config.yaml
 ├── data/
 │   ├── my_project/
 │   │   ├── SAMPLE001.cram
@@ -112,17 +134,28 @@ canine_seq/
 │   │   └── sample_sheet.csv
 │   │
 │   └── reference/
-│       └── Canis_lupus_familiarisgsd_UU_Cfam_GSD_1.0_116/
+│       └── host_reference/
 │           ├── genome.fa
-│           ├── cdna.fa
-│           └── genes.gtf.gz
-│
+│           └── genes.gtf
+|        └── virus_reference/
+|           ├── virus.fa
+│           └── virus.gtf
 └── runs/
-    └── my_run/
-        ├── logs/
-        ├── report/
+    └── test_run/
+        └── logs/
+          ├── main/
+          └── virus/
+        └── report/
+          ├── main/
+          └── virus/
+        └── igv/
+          ├── main/
+          └── virus/
         └── results/
+          ├── main/
+          └── virus/
 ```
+
 ### Threads
 The number of threads can be specified for each tool using `config.yaml`.
 ```yaml
@@ -150,6 +183,12 @@ Generate a workflow DAG:
 snakemake --dag | dot -Tpdf > dag.pdf
 ```
 
+Generate a workflow rulegraph:
+
+```bash
+snakemake --rulegraph | dot -Tpdf > rulegraph.pdf
+```
+
 Run the pipeline:
 
 ```bash
@@ -163,22 +202,43 @@ snakemake --cores 8
 Upon completion, the workflow will generate:
 
 ```text
-runs/<RUN_NAME>/
-├── logs/ 
-├── report/
-    ├── multiqc_data/
-│   └── multiqc_report.html
-└── results/ 
-    ├── fastqc/
-    ├── fastp/
-    ├── flagstat/
-    ├── kallisto/
-    ├── featurecounts/
-    ├── bam/
-    └── hisat2/
+runs/
+└── <RUN_NAME>/
+    ├── logs/
+    │   ├── main/
+    │   └── virus/
+    │
+    ├── report/
+    │   ├── main/
+    │   │   └── multiqc_report.html
+    │   │
+    │   └── virus/
+    │       └── multiqc_virus_report.html
+    │
+    ├── results/
+    │   ├── main/
+    │   │   ├── fastp/
+    │   │   ├── fastqc/
+    │   │   ├── featurecounts/
+    │   │   ├── flagstat/
+    │   │   ├── hisat2/
+    │   │   └── sort/
+    │   │
+    │   └── virus/
+    │       ├── fastqc/
+    │       ├── featurecounts/
+    │       ├── fastq/
+    │       ├── hisat2/
+    │       ├── sort/
+    │       └── unmapped/
+    │
+    └── igv/
+        └── main/
+            ├── *.bam
+            └── *.bam.bai
 ```
 
-`results/featurecounts` will contain the unmerged gene counts for each sample. 
+`featurecounts` will contain the unmerged gene counts for each sample. 
 
 ---
 ## License

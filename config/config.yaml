@@ -29,12 +29,3 @@ threads:
   kallisto: 4
   hisat2: 8
   featurecounts: 2
-  
-path: # Do NOT change these unless you are confident in directory structure and file locations.
-  run_dir: 'runs'
-  data_dir: 'data'
-  reference_dir: 'reference'
-  results_dir: 'results'
-  report_dir: 'report'
-  log_dir: 'logs'
-  

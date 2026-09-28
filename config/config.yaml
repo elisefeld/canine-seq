@@ -1,18 +1,26 @@
 project:
-  name: MY_PROJECT # Name of project used to define input and output directories
+  name: 'ORBIT' # Name of project used to define input and output directories
 
 run:
-  run_name:  run_MY_PROJECT
-  sample_sheet: "sample_sheet.csv"
-  ref_species: "Canis_lupus_familiarisgsd"
-  ref_build: "UU_Cfam_GSD_1.0"
-  ref_release: "Custom"
-  run_by: Elise Hachfeld
+  run_name:  run_for_students
+  sample_sheet: 'sample_sheet.csv'
+  run_by: 'Elise Hachfeld'
 
 ref: 
-  fasta: "genome.fa"
-  cdna: "cdna.fa"
-  gtf: "genes.gtf.gz"
+    main:
+      name: 'Canis_lupus_familiarisgsd_UU_Cfam_GSD_1.0_RefSeq_GCF_011100685.1'
+      species: 'Canis_lupus_familiarisgsd'
+      build: 'UU_Cfam_GSD_1.0'
+      release: 'RefSeq_GCF_011100685.1'
+      fasta: 'GCF_011100685.1_UU_Cfam_GSD_1.0_genomic.fasta'
+      gtf: 'genomic.gtf'
+    virus:
+      name: 'VSV_GCF_000850045.1'
+      species: 'Vesiculovirus Indiana'
+      build: 'NA'
+      release: 'NA'
+      fasta: 'GCF_000850045.1_ViralProj14673_genomic.fa'
+      gtf: 'genomic.gtf'
 
 threads:
   samtools: 6
@@ -23,10 +31,10 @@ threads:
   featurecounts: 2
   
 path: # Do NOT change these unless you are confident in directory structure and file locations.
-  run_dir: "runs"
-  data_dir: "data"
-  reference_dir: "reference"
-  results_dir: "results"
-  report_dir: "report"
-  log_dir: "logs"
+  run_dir: 'runs'
+  data_dir: 'data'
+  reference_dir: 'reference'
+  results_dir: 'results'
+  report_dir: 'report'
+  log_dir: 'logs'
   

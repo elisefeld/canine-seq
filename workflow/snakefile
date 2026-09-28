@@ -6,17 +6,14 @@ import pandas as pd
 ###########################
 ###### CONFIGURATION ######
 ###########################
-configfile: 'config/config.yaml'
+configfile: 'config/config.yaml' # loads user defined settings from config.yaml
 
 PROJECT = config['project']['name']
-SPECIES = config['run']['ref_species']
-BUILD = config['run']['ref_build']
-RELEASE = config['run']['ref_release']
 
 # Directory declaration and creation
-DATA_DIR = os.path.join(config['path']['data_dir'], PROJECT) 
-VSV_DIR = os.path.join(config['path']['data_dir'], config['path']['reference_dir'], 'VSV_GCF_000850045.1')
-REF_DIR = os.path.join(config['path']['data_dir'], config['path']['reference_dir'], f'{SPECIES}_{BUILD}_{RELEASE}')
+DATA_DIR = os.path.join(config['path']['data_dir'], PROJECT) # this directory should contain .cram and .crai
+MAIN_REF_DIR = os.path.join(config['path']['data_dir'], config['path']['reference_dir'], config['ref']['main']['name']) # should contain 
+VIRUS_REF_DIR = os.path.join(config['path']['data_dir'], config['path']['reference_dir'], config['ref']['virus']['name'])
 
 RUN_DIR = os.path.join(config['path']['run_dir'], config['run']['run_name'])
 RESULTS_DIR = os.path.join(RUN_DIR, config['path']['results_dir'])
@@ -25,16 +22,15 @@ LOGS_DIR = os.path.join(RUN_DIR, config['path']['log_dir'])
 IGV_DIR = os.path.join(RUN_DIR, 'igv')
 VIRUS_DIR = os.path.join(RUN_DIR, 'virus')
 
-dirs = [DATA_DIR, VSV_DIR, REF_DIR, RESULTS_DIR, REPORT_DIR, LOGS_DIR, IGV_DIR, VIRUS_DIR]
+dirs = [DATA_DIR, MAIN_REF_DIR, VIRUS_REF_DIR, RESULTS_DIR, REPORT_DIR, LOGS_DIR, IGV_DIR, VIRUS_DIR]
 for directory in dirs:
     os.makedirs(directory,exist_ok=True)
     print(f'Project directory \'{directory}\' created successfully', file=sys.stderr)
 
-FASTA = os.path.join(REF_DIR, config['ref']['fasta'])
-GTF   = os.path.join(REF_DIR, config['ref']['gtf'])
-CDNA  = os.path.join(REF_DIR, config['ref']['cdna'])
-VSV_FASTA = os.path.join(VSV_DIR, 'GCF_000850045.1_ViralProj14673_genomic.fa')
-VSV_GTF   = os.path.join(VSV_DIR, 'genomic.gtf')
+FASTA = os.path.join(MAIN_REF_DIR, config['ref']['main']['fasta'])
+GTF   = os.path.join(MAIN_REF_DIR, config['ref']['main']['gtf'])
+VIRUS_FASTA = os.path.join(VIRUS_REF_DIR, config['ref']['virus']['fasta'])
+VIRUS_GTF   = os.path.join(VIRUS_REF_DIR, config['ref']['virus']['gtf'])
 
 # File declaration and checks
 SAMPLE_SHEET = os.path.join(DATA_DIR, config['run']['sample_sheet'])
@@ -60,13 +56,13 @@ if len(sample_data) > 0:
     for sample in sample_data:
         print(f'- {sample}', file=sys.stderr)
 else:
-    raise ValueError('No samples found in sample sheet')
+    raise ValueError(f'No samples found in data directory ({DATA_DIR})')
 
 SAMPLES = (set(sample_sheet) & set(sample_data)) # samples present in both locations
 MISSING = sorted(set(sample_sheet) - set(sample_data)) # samples listed in sample sheet but missing from data directory
 
 if MISSING:
-    print(f'WARNING: {len(MISSING)} samples from the sample sheet ({SAMPLE_SHEET} were not found in data directory ({DATA_DIR}):', file=sys.stderr)
+    print(f'WARNING: {len(MISSING)} samples from the sample sheet ({SAMPLE_SHEET}) were not found in data directory ({DATA_DIR}):', file=sys.stderr)
     for sample in MISSING:
         print(f'- {sample}', file=sys.stderr)
 
@@ -74,7 +70,7 @@ print(f'Found {len(SAMPLES)} valid samples:', file=sys.stderr)
 for sample in SAMPLES:
         print(f'- {sample}', file=sys.stderr)
 
-print(f'Running analysis of {len(SAMPLES)} RNA-seq samples for {PROJECT} project. \nSpecies: {SPECIES} \nBuild: {BUILD} \nRelease: {RELEASE}', file=sys.stderr)
+print(f'Running analysis of {len(SAMPLES)} RNA-seq samples for {PROJECT} project.' , file=sys.stderr)
 
 # Declaring desired outputs for the pipeline
 rule all:
@@ -459,10 +455,10 @@ rule fastqc_viral:
         '''
 rule hisat2_index_viral:
     input: 
-        fasta=VSV_FASTA
+        fasta=VIRUS_FASTA
     output: 
         multiext(
-            VSV_FASTA,
+            VIRUS_FASTA,
             '.1.ht2',
             '.2.ht2',
             '.3.ht2',
@@ -474,7 +470,7 @@ rule hisat2_index_viral:
     threads:
         config['threads']['hisat2']
     params:
-        index_base=f'{VSV_FASTA}'
+        index_base=f'{VIRUS_FASTA}'
     log:
         f'{VIRUS_DIR}/logs/hisat2/index_viral.log'
     shell:
@@ -489,7 +485,7 @@ rule hisat2_index_viral:
 rule align_viral:
     input: 
         multiext(
-            VSV_FASTA,
+            VIRUS_FASTA,
             '.1.ht2',
             '.2.ht2',
             '.3.ht2',
@@ -507,7 +503,7 @@ rule align_viral:
     log:
         f'{VIRUS_DIR}/logs/hisat2_virus/{{sample}}_virus_align.log'
     params:
-        index_base=f'{VSV_FASTA}'
+        index_base=f'{VIRUS_FASTA}'
     shell:
         '''
         echo 'Aligning reads from {input.R1} and {input.R2} to viral reference...'
@@ -540,7 +536,7 @@ rule sort_viral_bam:
 rule feature_counts_viral:
     input:
         bams=expand(f'{VIRUS_DIR}/sort/{{sample}}_aligned_sorted_viral.bam', sample=SAMPLES),
-        gtf=VSV_GTF
+        gtf=VIRUS_GTF
     output:
         counts=f'{VIRUS_DIR}/featurecounts/counts_viral.txt'
     threads:

@@ -9,16 +9,10 @@ run:
 ref: 
     main:
       name: 'Canis_lupus_familiarisgsd_UU_Cfam_GSD_1.0_RefSeq_GCF_011100685.1'
-      species: 'Canis_lupus_familiarisgsd'
-      build: 'UU_Cfam_GSD_1.0'
-      release: 'RefSeq_GCF_011100685.1'
       fasta: 'GCF_011100685.1_UU_Cfam_GSD_1.0_genomic.fasta'
       gtf: 'genomic.gtf'
     virus:
       name: 'VSV_GCF_000850045.1'
-      species: 'Vesiculovirus Indiana'
-      build: 'NA'
-      release: 'NA'
       fasta: 'GCF_000850045.1_ViralProj14673_genomic.fa'
       gtf: 'genomic.gtf'
 

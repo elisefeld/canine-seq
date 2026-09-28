@@ -32,7 +32,7 @@ run_model <- function(dds, min_count, min_samples, test = c("Wald", "LRT"), redu
                       
                       
                       
-extract_results <- function(dds) {
+extract_results <- function(dds, min_alpha, min_logfold) {
   coefficients <- resultsNames(dds)
   df_list <- list()
   for (coef in coefficients[-1]) {

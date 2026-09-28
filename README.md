@@ -44,11 +44,13 @@ It is recommended to run this program inside a conda environment using a conda p
 
 ### Input
 
-Raw data and the sample sheet must be stored in a subdirectory under `data/` whose name matches the project name in `config.yaml`
+The raw data in CRAM format and the corresponding sample sheet must be stored in a subdirectory under `data/` The name of this folder must be specified using `project.name` in `config.yaml` 
+
+The sample sheet file name is specified by `run.sample_sheet` in `config.yaml`. It must contain a column named `sample_id` containing sample names that exactly match the CRAM filenames (excluding extensions). An example sample sheet is provided [here](config/example_sheet.csv).
 
 Host and viral reference files must be stored in subdirectories under `data/reference/`. The subdirectory names must match the values specified in `ref.main.name` and `ref.virus.name` within `config.yaml`. These subdirectories must each contain a genome fasta file and annotation gtf file corresponding to the correct organism. 
 
-The sample sheet must contain a column named `sample_id` containing sample names that exactly match the CRAM filenames (excluding extensions). An example sample sheet is provided [here](config/example_sheet.csv).
+
 
 ```text
 canine_seq/
@@ -56,19 +58,19 @@ canine_seq/
 │   ├── env.yaml
 │   └── config.yaml
 ├── data/
-│   ├── <PROJECT>/
+│   ├── <PROJECT.NAME>/
 │   │   ├── sample.cram
 │   │   ├── sample.cram.crai
-│   │   └── <SAMPLE_SHEET>
+│   │   └── <RUN.SAMPLE_SHEET>
 │   └── reference/
-│       └── <REF_MAIN_NAME>/
-│           ├── <FASTA>
-│           └── <GTF>
-|        └── <REF_VIRUS_NAME>/
-│           ├── <FASTA>
-│           └── <GTF>
+│       └── <REF.MAIN.NAME>/
+│           ├── <REF.MAIN.FASTA>
+│           └── <REF.MAIN.GTF>
+|        └── <REF.VIRUS.NAME>/
+│           ├── <REF.VIRUS.FASTA>
+│           └── <REF.VIRUS.GTF>
 └── runs/
-    └── <RUN_NAME>/
+    └── <RUN.RUN_NAME>/
         ├── logs/
         │   ├── main/
         │   └── virus/

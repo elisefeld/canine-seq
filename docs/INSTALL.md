@@ -62,6 +62,13 @@ We will download the Linux distribution Ubuntu to use with WSL.
 5. Double click on **canine-seq-main.zip** to unzip the file
 6. Drag the folder **canine-seq-main** to your external hard drive
 
+Alternatively, if you use git, you can clone the repo. 
+
+```bash
+git clone https://github.com/elisefeld/canine-seq.git
+cd canine-seq
+```
+
 ## Step 4: Install Conda and Create the Environment
 #### Install Miniforge
 1. Download the latest miniforge installer:

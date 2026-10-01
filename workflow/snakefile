@@ -611,7 +611,7 @@ rule multiqc_virus:
         multiqc {RESULTS_VIRUS_DIR} \
         {LOGS_VIRUS_DIR} \
         -o {REPORT_VIRUS_DIR} \
-        -n multiqc_viral_report.html
+        -n multiqc_virus_report.html
         &> {log}
         '''
 
